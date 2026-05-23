@@ -61,7 +61,6 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_news_collected ON news_raw(collected_at);
         CREATE INDEX IF NOT EXISTS idx_news_processed ON news_raw(is_processed);
         CREATE INDEX IF NOT EXISTS idx_popup_created ON popup(created_at);
-        CREATE INDEX IF NOT EXISTS idx_seen_first ON seen_titles(first_seen);
     """)
     conn.commit()
     conn.close()
@@ -167,29 +166,14 @@ def get_recent_popups(limit=20):
     conn.close()
     return [dict(r) for r in rows]
 
-# ── Seen Titles 操作 ──
+# ── 去重（基于 news_raw.id）──
 
-def is_seen(normalized):
+def is_seen(nid):
+    """用 news_raw 的 id 去重"""
     conn = get_db()
-    r = conn.execute("SELECT 1 FROM seen_titles WHERE normalized=?", (normalized,)).fetchone()
+    r = conn.execute("SELECT 1 FROM news_raw WHERE id=?", (nid,)).fetchone()
     conn.close()
     return r is not None
-
-def mark_seen(normalized, source, title):
-    conn = get_db()
-    conn.execute(
-        "INSERT OR IGNORE INTO seen_titles (normalized, source, title, first_seen) VALUES (?,?,?,?)",
-        (normalized, source, title, time.time())
-    )
-    conn.commit()
-    conn.close()
-
-def cleanup_old_seen():
-    """清理30天前的去重记录"""
-    conn = get_db()
-    conn.execute("DELETE FROM seen_titles WHERE first_seen < ?", (time.time() - 2592000,))
-    conn.commit()
-    conn.close()
 
 # ── 统计 ──
 

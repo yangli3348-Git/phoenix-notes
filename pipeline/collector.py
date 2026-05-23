@@ -165,12 +165,11 @@ def deduplicate(source_name, titles_list):
     batch_to_insert = []
     for t in titles_list:
         norm = normalize(t["title"])
-        if db.is_seen(norm):
+        nid = f"{source_name}_{abs(hash(norm)) % 100000}"
+        if db.is_seen(nid):
             continue
         if not is_within_24h(t.get("pubDate", "")):
             continue
-        db.mark_seen(norm, source_name, t["title"])
-        nid = f"{source_name}_{abs(hash(norm)) % 100000}"
         entry = {
             "id": nid,
             "title": t["title"],
@@ -331,8 +330,7 @@ def main():
             log(f"🤖 翻译+坐标 {len(all_new_entries)} 条新标题...")
             batch_translate(all_new_entries)
 
-        # 3. 清理 & 统计
-        db.cleanup_old_seen()
+        # 3. 统计
         pool_size, src_counts = generate_titles_json()
         stats = db.get_stats()
 
