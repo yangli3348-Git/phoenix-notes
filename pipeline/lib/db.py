@@ -5,7 +5,7 @@ import sqlite3, json, os, time
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(HERE, "data", "news.db")
+DB_PATH = os.path.join(HERE, "..", "data", "news.db")
 
 def get_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
