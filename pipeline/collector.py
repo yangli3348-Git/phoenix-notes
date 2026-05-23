@@ -17,6 +17,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # ── 配置 ──
 INTERVAL = int(os.environ.get("COLLECTOR_INTERVAL", "900"))
+SKIP_TRANSLATE = os.environ.get("COLLECTOR_SKIP_TRANSLATE", "").lower() in ("1", "true", "yes")
 FORCE_PROXY = os.environ.get("COLLECTOR_FORCE_PROXY", "").lower() in ("1", "true", "yes")
 DEEPSEEK_KEY = "sk-9f7eb5c437c74b5ea22af41f230ce2b4"
 PROXY_URL = "http://127.0.0.1:7890"
@@ -330,9 +331,11 @@ def main():
                 log(f"[{name:>10}] ❌ {e}")
 
         # 2. DeepSeek 批量翻译+坐标 → 自动回写 DB
-        if all_new_entries:
+        if all_new_entries and not SKIP_TRANSLATE:
             log(f"🤖 翻译+坐标 {len(all_new_entries)} 条新标题...")
             batch_translate(all_new_entries)
+        elif all_new_entries:
+            log(f"⏭️ 跳过翻译（COLLECTOR_SKIP_TRANSLATE=1）, 直接入库 {len(all_new_entries)} 条")
 
         # 3. 统计
         pool_size, src_counts = generate_titles_json()

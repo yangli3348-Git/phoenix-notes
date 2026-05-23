@@ -77,7 +77,7 @@ SOURCES = [
         "type": "rss",
         "fetcher": "tass",
         "url": "https://tass.com/rss/v2.xml",
-        "proxy": True,  # 需要代理+User-Agent
+        "proxy": False,
     },
 ]
 
