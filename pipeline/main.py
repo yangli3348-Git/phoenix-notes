@@ -1,9 +1,9 @@
 """
 🎙️ 进程二：弹窗制作器
-每15分钟: 扫描 titles_24h.json 新标题 → 抓详情 → DeepSeek口播 → TTS → popup_data.json
+每15分钟: 从 SQLite 扫描未处理新闻 → 抓详情 → DeepSeek口播 → TTS → 入库+popup_data.json
 """
 
-import os, sys, time
+import os, sys, json, time
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -11,57 +11,52 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fetcher import fetch
 from script_gen import generate
 from tts import synthesize
-from store import load_json, save_json
+import db
 
 # ── 数据路径 ──
 HERE = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(HERE, "data")
-OUTPUT_DIR = os.path.join(HERE, "..", "大屏")  # popup_data.json + mp3 统一输出到大屏目录
-os.makedirs(DATA_DIR, exist_ok=True)
+OUTPUT_DIR = os.path.join(HERE, "..", "大屏")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 INTERVAL = 900
 MAX_POPUP = 50
-
-TITLES_FILE = os.path.join(DATA_DIR, "titles_24h.json")
-PROCESSED_FILE = os.path.join(DATA_DIR, "processed_ids.json")
 POPUP_FILE = os.path.join(OUTPUT_DIR, "popup_data.json")
 
 
-def load_titles():
-    """读取采集器产出的 titles_24h.json"""
-    return load_json(TITLES_FILE, [])
-
-
-def load_processed():
-    return load_json(PROCESSED_FILE, {})
-
-
-def save_processed(data):
-    save_json(PROCESSED_FILE, data)
+def get_new_titles():
+    """从 DB 获取未处理的新闻"""
+    rows = db.get_unprocessed_news()
+    for r in rows:
+        if isinstance(r.get("images"), str):
+            r["images"] = json.loads(r["images"])
+        r["title_original"] = r.get("title_original", "")
+        r["title_cn"] = r.get("title_cn", "")
+        r["source"] = r.get("source", "")
+        r["link"] = r.get("link", "")
+        r["has_images"] = bool(r.get("has_rss_images"))
+        r["description"] = r.get("description", "")
+        r["full_text"] = r.get("full_text", "")
+    return rows
 
 
 def load_popup():
-    return load_json(POPUP_FILE, [])
+    """读取 popup_data.json"""
+    if os.path.exists(POPUP_FILE):
+        with open(POPUP_FILE) as f:
+            return json.load(f)
+    return []
 
 
 def save_popup(data):
-    save_json(POPUP_FILE, data[-MAX_POPUP:])
+    """保存 popup_data.json"""
+    with open(POPUP_FILE, 'w') as f:
+        json.dump(data[-MAX_POPUP:], f, ensure_ascii=False, indent=2)
 
 
-def get_new_titles(titles, processed):
-    """挑出未处理的新标题"""
-    new_items = []
-    for t in titles:
-        tid = t.get("id", "")
-        if tid not in processed:
-            new_items.append(t)
-    return new_items
-
-
-def process_item(item, processed, popup_data):
+def process_item(item, popup_data):
     """处理单条：抓取→口播→TTS"""
-    src = item["source"]
-    tid = item["id"]
+    src = item.get("source", "")
+    tid = item.get("id", "")
     title = item.get("title_original", item.get("title", ""))[:80]
 
     print(f"  📡 [{src}] {title}...")
@@ -80,7 +75,7 @@ def process_item(item, processed, popup_data):
     # 新华社：RSS无图就不抓详情
     if src == "xin-world" and not has_xin_images:
         print(f"    ⏭️ 新华社无配图，跳过")
-        processed[tid] = True
+        db.mark_processed(tid)
         return None
 
     if has_rss_text and has_rss_images:
@@ -105,7 +100,7 @@ def process_item(item, processed, popup_data):
             print(f"    ⚠️ 详情页也无图，用纯文字")
         else:
             print(f"    ⏭️ 详情页无内容，跳过")
-            processed[tid] = True
+            db.mark_processed(tid)
             return None
     else:
         # RSS 无文（新华社/RSS极短）→ 抓详情页拿文+图
@@ -119,19 +114,19 @@ def process_item(item, processed, popup_data):
         }
         detail = fetch(src, fetch_item)
         if not detail or len(detail.get("text", "")) < 30:
-            processed[tid] = True
+            db.mark_processed(tid)
             return None
 
     # 无图不制作弹窗
     if not detail.get("images"):
         print(f"    ⏭️ 无配图，跳过")
-        processed[tid] = True
+        db.mark_processed(tid)
         return None
 
     # 2. DeepSeek 口播
     cn_title, script = generate(detail)
     if not script:
-        processed[tid] = True
+        db.mark_processed(tid)
         return None
 
     print(f"    📰 {cn_title}")
@@ -144,7 +139,7 @@ def process_item(item, processed, popup_data):
     audio_path = os.path.join(OUTPUT_DIR, audio_name)
 
     if synthesize(script, audio_path):
-        processed[tid] = True
+        db.mark_processed(tid)
         return {
             "id": f"{src_short}_{ts}",
             "source": src_short,
@@ -156,24 +151,22 @@ def process_item(item, processed, popup_data):
             "time": datetime.now(timezone.utc).isoformat(),
         }
 
-    processed[tid] = True
+    db.mark_processed(tid)
     return None
 
 
 def main():
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🎙️ 弹窗制作器 v4 启动")
-    print(f"  标题数据: {TITLES_FILE}")
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🎙️ 弹窗制作器 v5 启动")
+    print(f"  存储: SQLite @ {db.DB_PATH}")
     print(f"  弹窗数据: {POPUP_FILE}")
     print(f"  容量上限: {MAX_POPUP}条")
     print(f"  轮询间隔: {INTERVAL}秒")
 
     while True:
         try:
-            titles = load_titles()
-            processed = load_processed()
+            new_titles = get_new_titles()
             popup_data = load_popup()
 
-            new_titles = get_new_titles(titles, processed)
             if not new_titles:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] 无新标题, 等待...")
                 time.sleep(INTERVAL)
@@ -183,26 +176,23 @@ def main():
             added = 0
 
             for item in new_titles:
-                result = process_item(item, processed, popup_data)
+                result = process_item(item, popup_data)
                 if result:
+                    result["news_id"] = item["id"]
                     popup_data.append(result)
+                    db.insert_popup(result)
                     added += 1
 
-                # 每处理5条存一次
                 if added > 0 and added % 5 == 0:
                     save_popup(popup_data)
-                    save_processed(processed)
 
             if added:
                 save_popup(popup_data)
-                save_processed(processed)
                 print(f"  ✅ 新增{added}条 → popup_data.json ({len(popup_data)}条)")
 
-            save_processed(processed)
             time.sleep(INTERVAL)
 
         except KeyboardInterrupt:
-            save_processed(processed)
             break
         except Exception as e:
             print(f"  ❌ 错误: {e}")

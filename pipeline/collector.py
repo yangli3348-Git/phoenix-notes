@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 📡 进程一：标题采集器（轻量常驻）
-每15分钟: 轮询9源 → 去重 → DeepSeek 翻译+坐标 → 入池 titles_24h.json
+每15分钟: 轮询9源 → 去重(DB) → DeepSeek 翻译+坐标 → 入SQLite
 """
 
-import subprocess, re, json, time, os, requests, threading
+import subprocess, re, json, time, os, requests
 from datetime import datetime, timezone, timedelta
 
 # ── 绝对路径 ──
@@ -18,10 +18,6 @@ FORCE_PROXY = os.environ.get("COLLECTOR_FORCE_PROXY", "").lower() in ("1", "true
 DEEPSEEK_KEY = "sk-9f7eb5c437c74b5ea22af41f230ce2b4"
 PROXY_URL = "http://127.0.0.1:7890"
 
-TITLES_FILE = os.path.join(DATA_DIR, "titles_24h.json")
-SEEN_FILE = os.path.join(DATA_DIR, "seen_titles.json")
-STATS_FILE = os.path.join(DATA_DIR, "collector_stats.json")
-
 # ── 源 ──
 from sources import SOURCES
 
@@ -29,10 +25,9 @@ if FORCE_PROXY:
     for s in SOURCES:
         s["proxy"] = True
 
-# ── 全局状态 ──
-write_lock = threading.Lock()
-seen_titles = {}  # {normalized: {title, source, link, pubDate, first_seen}}
-source_order = [s["name"] for s in SOURCES]  # 保持源顺序
+# ── 数据库 ──
+import db
+source_order = [s["name"] for s in SOURCES]
 
 def log(msg):
     print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {msg}", flush=True)
@@ -162,43 +157,38 @@ def fetch_rss(src):
         })
     return titles
 
-# ── 去重入库 ──
-def load_seen():
-    global seen_titles
-    if os.path.exists(SEEN_FILE):
-        with open(SEEN_FILE) as f:
-            seen_titles = json.load(f)
-        log(f"加载去重库: {len(seen_titles)} 条")
-
-def save_seen():
-    with write_lock:
-        with open(SEEN_FILE, "w") as f:
-            json.dump(seen_titles, f, ensure_ascii=False)
-
+# ── 去重入库（基于 SQLite）──
 def deduplicate(source_name, titles_list):
-    """去重，返回新增的标题列表"""
+    """去重，返回新增的标题列表。去重和入库走 DB"""
     new_entries = []
     now_ts = time.time()
-    with write_lock:
-        for t in titles_list:
-            norm = normalize(t["title"])
-            if norm in seen_titles:
-                continue
-            if not is_within_24h(t.get("pubDate", "")):
-                continue
-            entry = {
-                "title": t["title"],
-                "source": source_name,
-                "link": t.get("link", ""),
-                "pubDate": t.get("pubDate", ""),
-                "titleImages": t.get("titleImages", []),
-                "description": t.get("description", ""),
-                "images": t.get("images", []),
-                "full_text": t.get("full_text", ""),
-                "first_seen": now_ts,
-            }
-            seen_titles[norm] = entry
-            new_entries.append(entry)
+    batch_to_insert = []
+    for t in titles_list:
+        norm = normalize(t["title"])
+        if db.is_seen(norm):
+            continue
+        if not is_within_24h(t.get("pubDate", "")):
+            continue
+        db.mark_seen(norm, source_name, t["title"])
+        nid = f"{source_name}_{abs(hash(norm)) % 100000}"
+        entry = {
+            "id": nid,
+            "title": t["title"],
+            "title_original": t["title"],
+            "source": source_name,
+            "link": t.get("link", ""),
+            "pubDate": t.get("pubDate", ""),
+            "titleImages": t.get("titleImages", []),
+            "description": t.get("description", ""),
+            "images": t.get("images", []),
+            "full_text": t.get("full_text", ""),
+            "has_images": bool(t.get("titleImages") or t.get("images")),
+            "first_seen": now_ts,
+        }
+        new_entries.append(entry)
+        batch_to_insert.append(entry)
+    if batch_to_insert:
+        db.upsert_news(batch_to_insert)
     return new_entries
 
 # ── DeepSeek 批量翻译+坐标（json_mode）──
@@ -289,66 +279,30 @@ def batch_translate(new_entries, batch_size=200):
                 e["city"] = "unknown"
                 e["lat"], e["lng"] = 0.0, 0.0
             results.extend(batch)
+    # 翻译完后同步到 DB
+    db.update_translation(results)
     return results
 
-# ── 出池&写文件 ──
+# ── 查询（兼容旧调用）──
 def generate_titles_json():
-    """从 seen_titles 生成 titles_24h.json（只含24h内+翻译后的）"""
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).timestamp()
-    titles = []
-    with write_lock:
-        for norm, info in seen_titles.items():
-            if info.get("first_seen", 0) < cutoff:
-                continue
-            titles.append({
-                "id": f"{info['source']}_{abs(hash(norm)) % 100000}",
-                "source": info["source"],
-                "title_original": info["title"],
-                "title_cn": info.get("title_cn", info["title"][:20]),
-                "link": info.get("link", ""),
-                "pubDate": info.get("pubDate", ""),
-                "first_seen": info["first_seen"],
-                "city": info.get("city", "unknown"),
-                "lat": info.get("lat", 0.0),
-                "lng": info.get("lng", 0.0),
-                "has_images": bool(info.get("titleImages") or info.get("images")),
-                # RSS 预取字段（可跳过详情抓取）
-                "description": info.get("description", ""),
-                "images": info.get("images", []),
-                "full_text": info.get("full_text", ""),
-            })
-
-    titles.sort(key=lambda x: x.get("first_seen", 0), reverse=True)
-
-    with open(TITLES_FILE, "w") as f:
-        json.dump(titles, f, ensure_ascii=False, indent=2)
-
+    """从 DB 获取过去24小时新闻"""
+    titles = db.get_recent_24h()
+    for t in titles:
+        if isinstance(t.get("images"), str):
+            t["images"] = json.loads(t["images"])
+        t["has_images"] = bool(t.get("has_rss_images"))
     src_counts = {}
     for t in titles:
         s = t["source"]
         src_counts[s] = src_counts.get(s, 0) + 1
     return len(titles), src_counts
 
-def save_stats(fetched, new_count, fail_count):
-    record = {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "pool_size": len([e for e in seen_titles.values() if e["first_seen"] > time.time() - 86400]),
-        "total_fetched": fetched,
-        "total_new": new_count,
-        "total_fail": fail_count,
-    }
-    with open(STATS_FILE, "w") as f:
-        json.dump(record, f, ensure_ascii=False, indent=2)
-
 # ── 主循环 ──
 def main():
     log("=" * 50)
-    log(f"📡 标题采集器 v4 · {len(SOURCES)}源 · 间隔{INTERVAL}s")
-    log(f"输出: {TITLES_FILE}")
-    log(f"去重: {SEEN_FILE}")
+    log(f"📡 标题采集器 v5 · {len(SOURCES)}源 · 间隔{INTERVAL}s")
+    log(f"存储: SQLite @ {db.DB_PATH}")
     log("=" * 50)
-
-    load_seen()
 
     while True:
         total_raw = 0
@@ -372,27 +326,18 @@ def main():
                 total_err += 1
                 log(f"[{name:>10}] ❌ {e}")
 
-        # 2. DeepSeek 批量翻译+坐标
+        # 2. DeepSeek 批量翻译+坐标 → 自动回写 DB
         if all_new_entries:
             log(f"🤖 翻译+坐标 {len(all_new_entries)} 条新标题...")
-            results = batch_translate(all_new_entries)
-            # 更新 seen_titles 中的翻译结果
-            with write_lock:
-                for e in results:
-                    norm = normalize(e["title"])
-                    if norm in seen_titles:
-                        seen_titles[norm]["title_cn"] = e.get("title_cn", e["title"][:20])
-                        seen_titles[norm]["city"] = e.get("city", "unknown")
-                        seen_titles[norm]["lat"] = e.get("lat", 0.0)
-                        seen_titles[norm]["lng"] = e.get("lng", 0.0)
+            batch_translate(all_new_entries)
 
-        # 3. 保存
-        save_seen()
+        # 3. 清理 & 统计
+        db.cleanup_old_seen()
         pool_size, src_counts = generate_titles_json()
-        save_stats(total_raw, total_new, total_err)
+        stats = db.get_stats()
 
         src_summary = " ".join(f"{s}:{src_counts.get(s,0)}" for s in source_order if src_counts.get(s, 0))
-        log(f"📊 池子: {pool_size}条 → {src_summary}")
+        log(f"📊 池子: {pool_size}条 | DB累计: {stats['total']}条 → {src_summary}")
 
         time.sleep(INTERVAL)
 
@@ -401,8 +346,6 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         log("[终止]")
-        save_seen()
-        generate_titles_json()
     except Exception as e:
         log(f"[致命] {e}")
         import traceback
