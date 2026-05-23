@@ -55,11 +55,12 @@ def is_within_24h(pub_date_str):
         return False  # 解析失败默认丢弃，避免放行所有
 
 def http_get(url, use_proxy=False):
-    cmd = ["curl", "-sL", "--max-time", "12"]
+    env = {**os.environ, "HTTP_PROXY": "", "HTTPS_PROXY": "", "http_proxy": "", "https_proxy": ""}
     if use_proxy:
-        cmd = ["curl", "-x", PROXY_URL, "-sL", "--max-time", "12"]
-    cmd.append(url)
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        cmd = ["curl", "-x", PROXY_URL, "-sL", "--max-time", "12", "-H", "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko", url]
+    else:
+        cmd = ["curl", "-sL", "--max-time", "12", "-H", "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko", url]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=20, env=env)
     if r.returncode != 0 or not r.stdout:
         raise Exception("empty response")
     return r.stdout
@@ -243,7 +244,9 @@ def batch_translate(new_entries, batch_size=200):
             content = body["choices"][0]["message"]["content"].strip()
             log(f"  🤖 DeepSeek 翻译 {len(batch)} 条")
 
-            # json_mode 直接解析
+            # json_mode 直接解析（兼容 markdown 包裹）
+            content = re.sub(r'^```(?:json)?\s*', '', content.strip())
+            content = re.sub(r'\s*```$', '', content)
             try:
                 data = json.loads(content)
                 items = data.get("items", [])
