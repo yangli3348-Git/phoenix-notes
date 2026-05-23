@@ -64,18 +64,20 @@ def process_item(item, processed, popup_data):
     tid = item["id"]
     title = item.get("title_original", item.get("title", ""))[:80]
 
-    # 跳过新华社无图的
-    if src == "xin-world" and not item.get("has_images", False):
-        if len(title) < 30:
-            processed[tid] = True
-            return None
-
     print(f"  📡 [{src}] {title}...")
 
     # 如果 RSS 已包含足够文本，直接使用，跳过详情抓取
     rss_full_text = item.get("full_text", "")
     rss_description = item.get("description", "")
     rss_images = item.get("images", [])
+
+    # 无图不制作弹窗
+    has_rss_images = len(rss_images) > 0
+    has_xin_images = src == "xin-world" and item.get("has_images", False)
+    if not has_rss_images and not has_xin_images:
+        print(f"    ⏭️ 无配图，跳过")
+        processed[tid] = True
+        return None
 
     # 决定用哪段文本：优先 full_text，其次 description
     rss_text = rss_full_text if (rss_full_text and len(rss_full_text) >= 100) else rss_description
