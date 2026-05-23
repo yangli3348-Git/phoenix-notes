@@ -168,7 +168,8 @@ def deduplicate(source_name, titles_list):
         nid = f"{source_name}_{abs(hash(norm)) % 100000}"
         if db.is_seen(nid):
             continue
-        if not is_within_24h(t.get("pubDate", "")):
+        # CNN RSS 停更(2023年)，跳过时间过滤；其他源仍需24h检查
+        if source_name != "cnn" and not is_within_24h(t.get("pubDate", "")):
             continue
         entry = {
             "id": nid,
