@@ -66,32 +66,43 @@ def process_item(item, processed, popup_data):
 
     print(f"  📡 [{src}] {title}...")
 
-    # 如果 RSS 已包含足够文本，直接使用，跳过详情抓取
+    # 如果能用RSS数据跳过详情抓取，就跳过。否则抓详情页拿文/图。
     rss_full_text = item.get("full_text", "")
     rss_description = item.get("description", "")
     rss_images = item.get("images", [])
 
-    # 无图不制作弹窗
+    # 选择RSS文本: 优先 full_text，其次 description
+    rss_text = rss_full_text if (rss_full_text and len(rss_full_text) >= 100) else rss_description
+    has_rss_text = rss_text and len(rss_text) >= 100
     has_rss_images = len(rss_images) > 0
     has_xin_images = src == "xin-world" and item.get("has_images", False)
-    if not has_rss_images and not has_xin_images:
-        print(f"    ⏭️ 无配图，跳过")
-        processed[tid] = True
-        return None
 
-    # 决定用哪段文本：优先 full_text，其次 description
-    rss_text = rss_full_text if (rss_full_text and len(rss_full_text) >= 100) else rss_description
-
-    if rss_text and len(rss_text) >= 100:
+    if has_rss_text and has_rss_images:
+        # RSS 已有文字+图片 → 跳过详情抓取
         detail = {
             "title": item.get("title_original", item.get("title", "")),
             "text": rss_text,
             "images": rss_images,
             "url": item.get("link", ""),
         }
-        print(f"    ⚡ RSS预取({len(rss_text)}字/{len(rss_images)}图)，跳过抓详情")
+        print(f"    ⚡ RSS预取({len(rss_text)}字/{len(rss_images)}图)，跳过详情")
+    elif has_rss_text and not has_rss_images and src != "xin-world":
+        # RSS有文没图 → 抓详情页取图（DW/TASS/AJ这种情况）
+        print(f"    🔍 RSS有文无图，抓详情页取图...")
+        fetch_item = {"source": src, "title": item.get("title_original", item.get("title", "")), "link": item.get("link", ""), "titleImages": [], "description": rss_description, "images": []}
+        detail = fetch(src, fetch_item)
+        if detail and detail.get("images"):
+            # 用RSS文字 + 详情页图片
+            detail["text"] = rss_text
+            print(f"    ✅ 从详情页获得{len(detail['images'])}张图")
+        elif detail and len(detail.get("text", "")) >= 30:
+            print(f"    ⚠️ 详情页也无图，用纯文字")
+        else:
+            print(f"    ⏭️ 详情页无内容，跳过")
+            processed[tid] = True
+            return None
     else:
-        # 构造 item 给 fetcher（兼容旧格式，同时传 RSS 预取数据备用）
+        # RSS 无文（新华社/RSS极短）→ 抓详情页拿文+图
         fetch_item = {
             "source": src,
             "title": item.get("title_original", item.get("title", "")),
@@ -100,12 +111,16 @@ def process_item(item, processed, popup_data):
             "description": rss_description,
             "images": rss_images,
         }
-
-        # 抓详情
         detail = fetch(src, fetch_item)
         if not detail or len(detail.get("text", "")) < 30:
             processed[tid] = True
             return None
+
+    # 无图不制作弹窗
+    if not detail.get("images"):
+        print(f"    ⏭️ 无配图，跳过")
+        processed[tid] = True
+        return None
 
     # 2. DeepSeek 口播
     cn_title, script = generate(detail)
