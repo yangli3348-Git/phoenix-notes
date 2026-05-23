@@ -30,7 +30,7 @@ def generate(detail):
         resp = requests.post(
             API_URL,
             headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
-            json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}],
+            json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}],
                   "max_tokens": 300, "temperature": 0.7},
             timeout=30
         )

@@ -228,7 +228,7 @@ def batch_translate(new_entries, batch_size=200):
                 "https://api.deepseek.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"},
                 json={
-                    "model": "deepseek-chat",
+                    "model": "deepseek-v4-flash",
                     "messages": [
                         {"role": "system", "content": TRANSLATE_SYSTEM},
                         {"role": "user", "content": titles_text}
