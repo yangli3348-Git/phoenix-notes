@@ -161,6 +161,48 @@ def fetch_rss(src):
         })
     return titles
 
+# ── 采集：Sitemap（CNN）──
+def fetch_sitemap(src):
+    """解析 XML sitemap，提取标题+链接+日期+图片"""
+    use_proxy = src.get("proxy", False)
+    html = http_get(src["url"], use_proxy=use_proxy)
+
+    items = re.findall(r'<url>(.*?)</url>', html, re.DOTALL)
+    if not items:
+        raise Exception("no items")
+
+    titles = []
+    for item in items:
+        title_m = re.search(r'<news:title>(.*?)</news:title>', item)
+        if not title_m:
+            continue
+        title = title_m.group(1).strip()
+        if len(title) < 10:
+            continue
+
+        loc_m = re.search(r'<loc>(.*?)</loc>', item)
+        link = loc_m.group(1).strip() if loc_m else ""
+
+        # 过滤视频和购物
+        if '/video/' in link or 'cnn-underscored' in link:
+            continue
+
+        date_m = re.search(r'<news:publication_date>(.*?)</news:publication_date>', item)
+        pub_date = date_m.group(1).strip() if date_m else ""
+
+        img_m = re.search(r'<image:loc>(.*?)</image:loc>', item)
+        images = [img_m.group(1).strip()] if img_m else []
+
+        titles.append({
+            "title": title,
+            "link": link,
+            "pubDate": pub_date,
+            "description": "",
+            "images": images,
+            "full_text": "",
+        })
+    return titles
+
 # ── 去重入库（基于 SQLite）──
 def deduplicate(source_name, titles_list):
     """去重，返回新增的标题列表。去重和入库走 DB"""
@@ -318,7 +360,12 @@ def main():
         for src in [s for s in SOURCES if s.get("enabled", True)]:
             name = src["name"]
             try:
-                titles = fetch_xinhua(src) if src["type"] == "xin_json" else fetch_rss(src)
+                if src["type"] == "xin_json":
+                    titles = fetch_xinhua(src)
+                elif src["type"] == "sitemap":
+                    titles = fetch_sitemap(src)
+                else:
+                    titles = fetch_rss(src)
                 raw = len(titles)
                 new_entries = deduplicate(name, titles)
                 new_count = len(new_entries)

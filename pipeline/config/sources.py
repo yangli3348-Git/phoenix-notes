@@ -45,7 +45,16 @@ SOURCES = [
         "fetcher": "generic",
         "url": "http://rss.cnn.com/rss/edition.rss",
         "proxy": True,
-        "enabled": False,  # RSS停更，全是2023年旧闻
+        "enabled": False,  # RSS停更，已改用 sitemap
+    },
+    {
+        "name": "cnn",
+        "label": "CNN",
+        "type": "sitemap",
+        "fetcher": "cnn",
+        "url": "https://edition.cnn.com/sitemap/news.xml",
+        "proxy": True,
+        "enabled": True,
     },
     {
         "name": "aj",

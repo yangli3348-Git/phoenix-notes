@@ -264,6 +264,43 @@ class TASSFetcher:
         return {"title": title, "text": text, "images": images, "url": url}
 
 
+class CNNFetcher:
+    """CNN — meta description (100-160字) + og:image"""
+    name = "cnn"
+
+    def fetch(self, item):
+        title = item.get("title", "")
+        url = item.get("link", "")
+        text = ""
+        images = item.get("images", [])
+
+        html = http_get(url, use_proxy=True)
+
+        # meta description 作为摘要
+        desc = re.search(r'name="description"[^>]*content="([^"]+)"', html, re.IGNORECASE)
+        if desc:
+            text = desc.group(1).strip()
+
+        # og:image (比 sitemap 的缩略图更大)
+        if not images:
+            og = re.search(r'property="og:image"[^>]*content="([^"]+)"', html)
+            if og:
+                images.append(og.group(1))
+
+        # fallback: p标签正文
+        if not text or len(text) < 50:
+            paras = re.findall(r'<p[^>]*>(.*?)</p>', html, re.DOTALL)
+            parts = []
+            for p in paras[:30]:
+                t = hlib.unescape(re.sub(r'<[^>]+>', ' ', p)).strip()
+                t = re.sub(r'\s+', ' ', t)
+                if len(t) > 30 and 'border-' not in t and 'no-repeat' not in t:
+                    parts.append(t)
+            text = " ".join(parts[:10]) if parts else title
+
+        return {"title": title, "text": text, "images": images, "url": url}
+
+
 class NYTFetcher:
     """NYT — 优先用 RSS description + images (绕过 paywall)，失败则抓详情"""
     name = "nyt"
@@ -307,7 +344,7 @@ FETCHERS = {
     "bbc":       BBCFetcher(),
     "rt":        RTFetcher(),
     "dw":        DWFetcher(),
-    "cnn":       GenericRSSFetcher("cnn"),
+    "cnn":       CNNFetcher(),
     "aj":        GenericRSSFetcher("aj"),
     "f24":       GenericRSSFetcher("f24"),
     "nyt":       NYTFetcher(),
