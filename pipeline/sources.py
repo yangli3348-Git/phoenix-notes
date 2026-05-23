@@ -74,9 +74,9 @@ SOURCES = [
         "name": "tass",
         "label": "塔斯社",
         "type": "rss",
-        "fetcher": "skip",  # 详情页纯JS渲染，弹窗跳过
+        "fetcher": "tass",
         "url": "https://tass.com/rss/v2.xml",
-        "proxy": False,
+        "proxy": True,  # 需要代理+User-Agent
     },
 ]
 

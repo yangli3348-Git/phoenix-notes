@@ -64,11 +64,6 @@ def process_item(item, processed, popup_data):
     tid = item["id"]
     title = item.get("title_original", item.get("title", ""))[:80]
 
-    # 跳过塔斯社（无详情）
-    if src == "tass":
-        processed[tid] = True
-        return None
-
     # 跳过新华社无图的
     if src == "xin-world" and not item.get("has_images", False):
         if len(title) < 30:

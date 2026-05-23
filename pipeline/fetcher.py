@@ -8,10 +8,12 @@ import html as hlib
 
 PROXY = "http://127.0.0.1:7890"
 
+UA = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko"
+
 def http_get(url, use_proxy=False):
-    cmd = ["curl", "-sL", "--max-time", "12"]
+    cmd = ["curl", "-sL", "--max-time", "12", "-H", f"User-Agent: {UA}"]
     if use_proxy:
-        cmd = ["curl", "-x", PROXY, "-sL", "--max-time", "12"]
+        cmd = ["curl", "-x", PROXY, "-sL", "--max-time", "12", "-H", f"User-Agent: {UA}"]
     cmd.append(url)
     r = subprocess.run(cmd, capture_output=True, text=True)
     return r.stdout
@@ -211,6 +213,57 @@ class GenericRSSFetcher:
 
 
 
+class TASSFetcher:
+    """塔斯社 — 正文在 text-block p标签, og:image在meta"""
+    name = "tass"
+
+    def fetch(self, item):
+        title = item.get("title", "")
+        url = item.get("link", "")
+        if "<![CDATA[" in url:
+            url = url.replace("<![CDATA[","").replace("]]>","")
+        url = url.split("?")[0]
+        text = ""
+        images = []
+
+        html = http_get(url, use_proxy=True)
+
+        # og:image
+        og = re.search(r'property="og:image"[^>]*content="([^"]+)"', html)
+        if og:
+            images.append(og.group(1))
+
+        # JSON-LD image fallback
+        ld_m = re.search(r'application/ld\+json[^>]*>\s*(\{.*?\})\s*</script>', html)
+        if ld_m:
+            try:
+                meta = json.loads(ld_m.group(1))
+                ld_img = meta.get("image", [])
+                if isinstance(ld_img, str) and not images:
+                    images.append(ld_img)
+                elif isinstance(ld_img, list) and not images:
+                    for i in ld_img:
+                        if isinstance(i, str):
+                            images.append(i)
+            except: pass
+
+        # 正文: div.text-content 里的所有 p 标签
+        tc = re.search(r'<div class="text-content">(.*?)<div class="column">', html, re.DOTALL)
+        if tc:
+            parts = []
+            for p in re.findall(r'<p>(.*?)</p>', tc.group(1), re.DOTALL):
+                t = hlib.unescape(re.sub(r'<[^>]+>', ' ', p)).strip()
+                t = re.sub(r'\s+', ' ', t)
+                if len(t) > 20:
+                    parts.append(t)
+            text = " ".join(parts)
+
+        if len(text) < 50:
+            text = title
+
+        return {"title": title, "text": text, "images": images, "url": url}
+
+
 class NYTFetcher:
     """NYT — 采集时已存 RSS description + media (绕过 paywall)"""
     name = "nyt"
@@ -235,7 +288,7 @@ FETCHERS = {
     "aj":        GenericRSSFetcher("aj"),
     "f24":       GenericRSSFetcher("f24"),
     "nyt":       NYTFetcher(),
-    "tass":      None,   # 纯JS渲染, 跳过
+    "tass":      TASSFetcher(),
 }
 
 def fetch(source, item):
