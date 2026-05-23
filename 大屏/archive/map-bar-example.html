@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<title>地图散点气泡图示例</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif}
+#chart{width:90vw;height:90vh}
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<script>
+// World map geo data from our dashboard - inline
+var wj = {"type":"FeatureCollection","features":[]};
+
+// Load world map from CDN
+var script = document.createElement('script');
+script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/map/json/world.json';
+fetch('https://unpkg.com/echarts-world-map@1.0.0/world.json')
+  .then(r => r.json())
+  .then(worldMap => {
+    echarts.registerMap('world', worldMap);
+    var chart = echarts.init(document.getElementById('chart'));
+    
+    var cities = [
+      {name:'北京',value:[116.46,39.92,120]},{name:'上海',value:[121.48,31.22,95]},
+      {name:'东京',value:[139.69,35.69,80]},{name:'首尔',value:[126.98,37.57,65]},
+      {name:'伦敦',value:[-0.13,51.51,70]},{name:'巴黎',value:[2.35,48.86,55]},
+      {name:'纽约',value:[-74.01,40.71,85]},{name:'洛杉矶',value:[-118.24,34.05,45]},
+      {name:'悉尼',value:[151.21,-33.87,50]},{name:'新加坡',value:[103.82,1.35,40]},
+      {name:'莫斯科',value:[37.62,55.76,60]},{name:'开罗',value:[31.24,30.04,35]},
+      {name:'香港',value:[114.17,22.32,100]},{name:'台北',value:[121.57,25.03,55]},
+      {name:'迪拜',value:[55.27,25.20,45]},{name:'曼谷',value:[100.50,13.76,38]},
+      {name:'约翰内斯堡',value:[28.05,-26.20,25]},{name:'温哥华',value:[-123.12,49.28,32]}
+    ];
+    
+    chart.setOption({
+      tooltip: {
+        trigger: 'item',
+        formatter: function(p) { return p.name + '<br/>影响力指数: ' + (p.value ? p.value[2] : ''); }
+      },
+      visualMap: {
+        min: 20, max: 120, text: ['高','低'],
+        inRange: {color: ['#313695','#4575b4','#74add1','#abd9e9','#fee090','#fdae61','#f46d43','#d73027']},
+        calculable: true
+      },
+      geo: {
+        map: 'world', roam: true,
+        itemStyle: {areaColor:'rgba(16,42,80,0.5)',borderColor:'rgba(56,132,255,0.2)',borderWidth:0.5},
+        emphasis: {itemStyle:{areaColor:'rgba(56,132,255,0.2)'},label:{show:false}},
+        label: {show:false}
+      },
+      series: [{
+        type: 'scatter', coordinateSystem: 'geo',
+        data: cities,
+        symbolSize: function(v) { return Math.sqrt(v[2]) * 4 + 5; },
+        label: {show:true,formatter:function(p){return p.name;},fontSize:11,color:'#fff',textShadowBlur:3,textShadowColor:'#000'},
+        emphasis: {label:{show:true,fontSize:14}}
+      }]
+    });
+    window.addEventListener('resize', function() { chart.resize(); });
+  });
+</script>
+</body>
+</html>

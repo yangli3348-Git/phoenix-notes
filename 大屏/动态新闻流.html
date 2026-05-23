@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<title>全球实时新闻 · 海外源</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2.1.0/dist/echarts-wordcloud.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a1628;overflow:hidden;font-family:"Noto Sans SC",sans-serif}
+#chart{width:100vw;height:100vh;position:relative}
+#cv{position:absolute;top:0;left:0;pointer-events:none;z-index:10}
+#bar{position:absolute;top:180px;left:20px;z-index:20;width:260px;background:rgba(10,22,40,0.75);border:1px solid rgba(56,132,255,0.1);border-radius:8px;padding:8px 12px;backdrop-filter:blur(4px);color:rgba(232,237,245,0.85);font-size:12px}
+.ni{padding:5px 0;border-bottom:1px solid rgba(56,132,255,0.08);display:flex;flex-direction:column;gap:2px;animation:fade .3s;cursor:default}
+.ni .ni-row{display:flex;gap:6px;align-items:center}
+.ni .t{color:#f5a623;font-size:10px;background:rgba(245,166,35,0.15);padding:1px 6px;border-radius:3px;white-space:nowrap}
+.ni .x{color:rgba(200,215,240,0.75);font-size:12px;line-height:1.4}
+.ni .s{color:rgba(200,215,240,0.3);font-size:10px;flex-shrink:0}
+.ft{position:absolute;pointer-events:none;z-index:15;padding:4px 8px;border-radius:3px;
+  background:rgba(10,22,40,0.88);border:1px solid rgba(245,166,35,0.5);color:rgba(232,237,245,0.9);
+  will-change:transform;transform-origin:center center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.ft .txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;display:inline}
+@keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes unroll{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:1}}
+#mainTitle{position:absolute;top:26px;left:300px;z-index:25;font-size:28px;font-weight:bold;color:#f5a623;letter-spacing:6px;text-shadow:0 0 16px rgba(245,166,35,0.4);pointer-events:none;white-space:nowrap}
+#mainTitle .mt-text{display:inline-block;padding:0 14px}
+#mainTitle .mt-line{display:inline-block;width:100px;height:1px;background:rgba(245,166,35,0.3);vertical-align:middle}
+.mt-date{position:absolute;top:60px;left:300px;z-index:25;font-size:12px;color:rgba(200,215,240,0.45);letter-spacing:2px;pointer-events:none}
+#hotPanel{position:absolute;top:20px;right:20px;z-index:30;width:320px;min-height:320px;background:rgba(10,22,40,0.92);border:1px solid rgba(56,132,255,0.2);border-radius:12px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);backdrop-filter:blur(8px);color:rgba(232,237,245,0.9);font-size:13px;line-height:1.5}
+#hotPanel .hp-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+#hotPanel .hp-hdr .hp-ttl{font-size:14px;font-weight:bold;color:#f5a623}
+#hotPanel .hp-hdr .hp-idx{color:rgba(200,215,240,0.4);font-size:12px}
+#hotPanel .hp-evt{margin-bottom:8px}
+#hotPanel .hp-evt-nm{font-size:15px;font-weight:bold;color:#fff;margin-bottom:2px}
+#hotPanel .hp-evt-meta{color:rgba(200,215,240,0.5);font-size:11px;margin-bottom:10px}
+#hotPanel .hp-angle{border-left:2px solid rgba(56,132,255,0.3);padding-left:10px;margin-bottom:10px}
+#hotPanel .hp-angle .hp-bar{display:inline-block;width:0;height:6px;border-radius:3px;flex-shrink:0;align-self:center;transition:width .4s;background:rgba(200,215,240,0.4);margin-left:auto}
+#hotPanel .hp-angle .hp-src{display:flex;gap:6px;margin:2px 0;font-size:12px;align-items:center;min-height:20px}
+#hotPanel .hp-angle .hp-src .hp-sn{color:#f5a623;min-width:64px;flex-shrink:0}
+#hotPanel .hp-angle .hp-src .hp-sd{color:rgba(232,237,245,0.7)}
+#hotPanel .hp-angle .hp-count{color:rgba(200,215,240,0.35);font-size:10px;min-width:22px;text-align:right;flex-shrink:0;align-self:center}
+#hotPanel .hp-summary{font-size:12px;color:#fff;margin-top:10px;padding-top:8px;border-top:1px solid rgba(56,132,255,0.12);line-height:1.5}
+#hotPanel .hp-ctl{display:flex;justify-content:center;gap:6px;margin-top:10px}
+#hotPanel .hp-ctl .hp-dot{width:8px;height:8px;border-radius:50%;background:rgba(56,132,255,0.25);cursor:pointer;transition:all .3s}
+#hotPanel .hp-ctl .hp-dot.active{background:#fff;box-shadow:0 0 8px rgba(245,166,35,0.5)}
+#hotPanel .hp-ctl .hp-dot:hover{background:rgba(56,132,255,0.5)}
+#hotPanel .hp-nxt{text-align:center;margin-top:6px;font-size:11px;color:rgba(200,215,240,0.3)}
+#hotPanel .hp-src-empty{visibility:hidden}
+#wordCloudCard{position:absolute;bottom:60px;right:20px;z-index:28;width:320px;height:200px;background:rgba(10,22,40,0.92);border:1px solid rgba(56,132,255,0.2);border-radius:12px;padding:8px;box-shadow:0 8px 32px rgba(0,0,0,0.5);backdrop-filter:blur(8px)}
+
+#barFold{position:absolute;top:180px;left:40px;z-index:22;width:20px;height:20px;border-radius:50%;background:rgba(56,132,255,0.2);border:1px solid rgba(56,132,255,0.3);color:rgba(200,215,240,0.5);font-size:11px;line-height:18px;text-align:center;cursor:pointer;transition:all .3s}
+#barFold:hover{background:rgba(56,132,255,0.4);color:#fff}
+#bar.folded{display:none}
+
+
+#popupSwitch {
+  display:flex; align-items:center; gap:8px; z-index:50;
+  background:rgba(10,22,40,0.8); border:1px solid rgba(56,132,255,0.2);
+  border-radius:20px; padding:4px 14px; cursor:pointer;
+  font-size:12px; color:#8899bb; backdrop-filter:blur(4px);
+  transition:border-color .3s;
+}
+#popupSwitch:hover { border-color: rgba(56,132,255,0.5); }
+#popupSwitch .dot {
+  width:10px; height:10px; border-radius:50%;
+  background:#4a8; transition:background .3s;
+}
+#popupSwitch.off .dot { background:#844; }
+
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<div id="mainTitle"><span class="mt-line"></span><span class="mt-text">24小时全球新闻热点</span><span class="mt-line"></span></div>
+<div id="mainDate" class="mt-date"></div>
+<div id="barFold" onclick="toggleBar()" title="折叠/展开">▸</div>
+<div id="bar"></div>
+<div id="popupSwitch" onclick="togglePopup()" title="切换新闻弹窗" style="position:absolute;top:184px;left:20px;z-index:30;display:inline-flex;align-items:center;gap:6px;background:rgba(10,22,40,.75);border:1px solid rgba(56,132,255,.15);border-radius:16px;padding:3px 12px 3px 10px;cursor:pointer;font-size:11px;color:#8899bb;backdrop-filter:blur(4px);transition:border-color .3s">
+  <span class="dot" style="width:8px;height:8px;border-radius:50%;background:#4a8;display:inline-block"></span>
+  <span id="popupSwitchLabel">弹窗播报</span>
+</div>
+<div id="hotPanel"><div class="hp-hdr"><span class="hp-ttl">热点追踪</span><span class="hp-idx" id="hpIdx">1/5</span></div><div id="hpBody"></div><div class="hp-ctl" id="hpDots"></div></div>
+
+<div id="wordCloudCard"></div>
+<script>
+fetch('./world.json').then(function(r){return r.json();}).then(function(wm){
+echarts.registerMap('world',wm);
+var ch=echarts.init(document.getElementById('chart'));
+ch.setOption({backgroundColor:'transparent',geo:{map:'world',roam:true,left:300,right:360,top:100,bottom:200,
+itemStyle:{areaColor:'rgba(16,42,80,0.35)',borderColor:'rgba(56,132,255,0.1)',borderWidth:0.5},
+emphasis:{itemStyle:{areaColor:'rgba(56,132,255,0.1)'},label:{show:false}},label:{show:false}},
+series:[{type:'scatter',coordinateSystem:'geo',data:[{value:[114.17,22.32]}],
+symbol:'image://./logo.png',symbolSize:32,zlevel:3}]});
+window.addEventListener('resize',function(){ch.resize();});
+
+var W=document.getElementById('chart');
+var C=document.createElement('canvas');C.id='cv';W.appendChild(C);
+var X=C.getContext('2d');
+function R(){C.width=W.offsetWidth;C.height=W.offsetHeight;}R();
+window.addEventListener('resize',R);ch.on('georoam',R);
+
+var HQ=[114.17,22.32];var PS=[];
+function P(l,la){return ch.convertToPixel({geoIndex:0},[l,la]);}
+
+var tagContainer=document.createElement('div');
+tagContainer.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:15';
+W.appendChild(tagContainer);
+
+var newsCache=[];
+function pollNews(){
+  fetch('./live_news.json?v='+Date.now()).then(function(r){return r.json();}).then(function(data){
+    if(data&&data.length>newsCache.length){newsCache=data;}
+  }).catch(function(){});
+}
+pollNews();
+setInterval(pollNews,30000);
+
+var REGIONS=[
+  {name:'东亚',minLng:100,maxLng:150,minLat:20,maxLat:55},
+  {name:'南亚',minLng:60,maxLng:100,minLat:5,maxLat:35},
+  {name:'中东',minLng:30,maxLng:65,minLat:10,maxLat:45},
+  {name:'欧洲',minLng:-10,maxLng:40,minLat:35,maxLat:70},
+  {name:'非洲',minLng:-20,maxLng:55,minLat:-35,maxLat:37},
+  {name:'北美',minLng:-130,maxLng:-50,minLat:10,maxLat:75},
+  {name:'拉美',minLng:-120,maxLng:-30,minLat:-55,maxLat:30},
+  {name:'大洋/全球',minLng:0,maxLng:0,minLat:0,maxLat:0}
+];
+
+function getRegion(lng,lat){
+  for(var i=0;i<REGIONS.length-1;i++){
+    var r=REGIONS[i];
+    if(lng>=r.minLng&&lng<=r.maxLng&&lat>=r.minLat&&lat<=r.maxLat) return r.name;
+  }
+  return '大洋/全球';
+}
+
+function countActiveByRegion(){
+  var cnt={};
+  REGIONS.forEach(function(r){cnt[r.name]=0;});
+  PS.forEach(function(q){cnt[q._region]=cnt[q._region]||0;cnt[q._region]++;});
+  return cnt;
+}
+
+function pickRegionByLowestActive(){
+  var cnt=countActiveByRegion();
+  var minCnt=999,minRegions=[];
+  for(var r in cnt){
+    if(cnt[r]<minCnt){minCnt=cnt[r];minRegions=[r];}
+    else if(cnt[r]===minCnt) minRegions.push(r);
+  }
+  return minRegions[Math.floor(Math.random()*minRegions.length)];
+}
+
+function pickNewsFromRegion(regionName){
+  var pool=[];
+  newsCache.forEach(function(n){
+    if(getRegion(n.lng,n.lat)===regionName) pool.push(n);
+  });
+  if(pool.length===0) pool=newsCache;
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+function tryPushNews(){
+  if(newsCache.length===0) return;
+  var region=pickRegionByLowestActive();
+  var news=pickNewsFromRegion(region);
+  addNews(news.title,news.source||news.city,news.lng,news.lat,news.url);
+}
+
+function rectsOverlap(a,b){
+  return !(a.r < b.l || a.l > b.r || a.b < b.t || a.t > b.b);
+}
+
+function findSafeOffset(px,py,elW,elH){
+  var margin=10, step=16, maxTries=8;
+  for(var attempt=0;attempt<maxTries;attempt++){
+    var overlap=false;
+    var ty=py+attempt*step;
+    var tryRect={l:px-elW/2-margin, r:px+elW/2+margin, t:ty-margin, b:ty+elH+margin};
+    for(var i=0;i<PS.length;i++){
+      var q=PS[i];if(!q._r) continue;
+      if(rectsOverlap(tryRect,q._r)){overlap=true;break;}
+    }
+    if(!overlap) return attempt*step;
+  }
+  return (maxTries-1)*step;
+}
+
+function addNews(title,city,lng,lat,url){
+  var birth=Date.now();
+  var el=document.createElement('div');
+  el.className='ft';
+  el.innerHTML='<span class="txt">'+title+'</span>';
+  el.style.animation='unroll 0.5s ease-out';
+  tagContainer.appendChild(el);
+  var elW=Math.min(title.length*14+16,260), elH=20;
+  el.style.maxWidth='260px';
+  var sp=P(lng,lat)||[0,0];
+  var px=sp[0], py=sp[1];
+  var offsetY=findSafeOffset(px,py,elW,elH);
+  PS.push({l:lng,la:lat,b:birth,L:30000,f:0,sp:0.003+Math.random()*0.002,el:el,offsetY:offsetY,_ew:elW,_eh:elH,_region:getRegion(lng,lat)});
+  PS[PS.length-1]._r={l:px-elW/2-10,r:px+elW/2+10,t:py+offsetY-4,b:py+offsetY+elH+4};
+  if(PS.length>5){var old=PS.shift();if(old.el&&old.el.parentNode)old.el.parentNode.removeChild(old.el);}
+  var d=new Date();var ts=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+  var b=document.getElementById('bar');var it=document.createElement('div');it.className='ni';
+  it.innerHTML='<div class="ni-row"><span class="t">'+city+'</span><span class="s">'+ts+'</span></div><span class="x">'+title+'</span>';
+  it.style.cursor=url?'pointer':'default';
+  it.title=url?'点击打开原文':'';
+  if(url){(function(u){it.onclick=function(){window.open(u,'_blank');};})(url);}
+  b.insertBefore(it,b.firstChild);while(b.children.length>5) b.removeChild(b.lastChild);
+}
+
+function scheduleNext(){
+  var delay=5000+Math.random()*5000;
+  setTimeout(function(){
+    try{tryPushNews();}catch(e){}
+    scheduleNext();
+  },delay);
+}
+scheduleNext();
+
+var pulseHistory=[];
+var lastPulseSecond=-1;
+var pulseTotalCount=newsCache.length;
+var pulseBeat=0;
+
+setInterval(function(){
+X.clearRect(0,0,C.width,C.height);
+var nowSec=Math.floor(Date.now()/1000);
+if(nowSec!==lastPulseSecond){
+  lastPulseSecond=nowSec;
+  pulseHistory.push(0);
+  if(pulseHistory.length>60) pulseHistory.shift();
+  if(nowSec%5===0) pulseHistory[pulseHistory.length-1]=Math.floor(Math.random()*3)+1;
+}
+pulseBeat=(Date.now()%2000)/2000;
+
+var cx=120, cy=100, outerR=56, innerR=40;
+var segCount=12;
+var segAngle=(Math.PI*2)/segCount;
+var pulsePhase=Date.now()/2000;
+
+X.save();
+X.font='bold 26px sans-serif';
+X.textAlign='center';
+X.textBaseline='middle';
+X.fillStyle='rgba(232,237,245,0.8)';
+X.fillText(pulseTotalCount,cx,cy-4);
+X.font='11px sans-serif';
+X.fillStyle='rgba(200,215,240,0.5)';
+X.fillText('总条数',cx,cy+22);
+X.restore();
+
+for(var i=0;i<segCount;i++){
+  var angle=-Math.PI/2+i*segAngle+Math.sin(pulsePhase+i)*0.05;
+  var histIdx=pulseHistory.length-segCount+i;
+  var val=histIdx>=0?(pulseHistory[histIdx]||0):0;
+  var bright=Math.min(0.15+val*0.15,0.7);
+  if(pulseBeat>0.8&&i===Math.floor(pulseBeat*segCount)%segCount) bright=0.9;
+  var r1=innerR, r2=outerR;
+  X.beginPath();
+  X.arc(cx,cy,r1,angle,angle+segAngle-0.08);
+  X.arc(cx,cy,r2,angle+segAngle-0.08,angle,true);
+  X.closePath();
+  X.fillStyle='rgba(56,132,255,'+bright+')';
+  X.fill();
+  X.strokeStyle='rgba(56,132,255,0.1)';
+  X.lineWidth=0.5;
+  X.stroke();
+}
+
+var gd=X.createRadialGradient(cx,cy,innerR-2,cx,cy,outerR+6);
+gd.addColorStop(0,'rgba(56,132,255,0)');
+gd.addColorStop(0.7,'rgba(56,132,255,0.03)');
+gd.addColorStop(1,'rgba(56,132,255,0)');
+X.beginPath();X.arc(cx,cy,outerR+6,0,Math.PI*2);X.fillStyle=gd;X.fill();
+
+X.save();
+X.font='9px sans-serif';
+X.textAlign='center';
+X.textBaseline='bottom';
+X.fillStyle='rgba(200,215,240,0.35)';
+X.fillText('7个海外源',cx,cy+outerR+16);
+X.restore();
+
+var tl=P(-180,85),br=P(180,-85);if(!tl||!br)return;
+X.save();X.beginPath();X.rect(tl[0],tl[1],br[0]-tl[0],br[1]-tl[1]);X.clip();
+var nw=Date.now();
+for(var i=PS.length-1;i>=0;i--){
+  var q=PS[i];if(nw-q.b>q.L){
+    if(q.el&&q.el.parentNode)q.el.parentNode.removeChild(q.el);
+    PS.splice(i,1);continue;
+  }
+  var t2=(nw-q.b)/q.L;var sp=P(q.l,q.la);var hp=P(HQ[0],HQ[1]);if(!sp||!hp)continue;
+  q.f+=q.sp;if(q.f>1)q.f-=1;
+  var la=0.7;if(t2<0.07)la*=t2/0.07;else if(t2>0.93)la*=(1-(t2-0.93)/0.07);
+  var P0=sp,P2=hp,P1=[(sp[0]+hp[0])/2,Math.min(sp[1],hp[1])-60];
+  X.beginPath();X.moveTo(P0[0],P0[1]);
+  for(var s=1;s<=50;s++){var u=s/50;X.lineTo((1-u)*(1-u)*P0[0]+2*(1-u)*u*P1[0]+u*u*P2[0],(1-u)*(1-u)*P0[1]+2*(1-u)*u*P1[1]+u*u*P2[1]);}
+  X.lineCap='round';X.lineJoin='round';X.strokeStyle='rgba(56,132,255,'+la+')';X.lineWidth=2;X.stroke();
+  if(q.f>0.01){var ft=q.f;
+    var dx=(1-ft)*(1-ft)*P0[0]+2*(1-ft)*ft*P1[0]+ft*ft*P2[0];var dy=(1-ft)*(1-ft)*P0[1]+2*(1-ft)*ft*P1[1]+ft*ft*P2[1];
+    X.beginPath();X.arc(dx,dy,3,0,Math.PI*2);X.fillStyle='rgba(56,132,255,'+la+')';X.fill();
+    var gd2=X.createRadialGradient(dx,dy,1,dx,dy,10);
+    gd2.addColorStop(0,'rgba(56,132,255,'+(la*0.5)+')');gd2.addColorStop(1,'rgba(56,132,255,0)');
+    X.beginPath();X.arc(dx,dy,10,0,Math.PI*2);X.fillStyle=gd2;X.fill();
+  }
+  var l2=t2>0.93?(1-(t2-0.93)/0.07):1;var yo=-(nw-q.b)*0.003;if(yo>0)yo=0;
+  q.el.style.opacity=l2;
+  q.el.style.transform='translateY('+yo+'px)';
+  q.el.style.left=(sp[0]-q._ew/2)+'px';q.el.style.top=(sp[1]-20+q.offsetY)+'px';
+  var ew=q._ew,eh=q._eh;
+  var ex=sp[0]-ew/2,ey=sp[1]-20+q.offsetY+yo;
+  q._r={l:ex-10,r:ex+ew+10,t:ey-4,b:ey+eh+4};
+  X.beginPath();X.arc(sp[0],sp[1],3,0,Math.PI*2);X.fillStyle='rgba(245,166,35,'+(l2*0.8)+')';X.fill();
+}
+X.restore();
+},16);
+});
+</script>
+
+<script>
+var HOT_SPOTS=[
+  {name:'制裁卡斯特罗',meta:'6个源 · 21条',
+    angle:[
+      {src:'BBC',txt:'谋杀指控+美军机逼近',count:4},
+      {src:'NYT',txt:'司法程序+特朗普施压',count:6},
+      {src:'F24',txt:'强调年龄+政策矛盾',count:5},
+      {src:'AJ',txt:'地缘影响分析',count:3},
+      {src:'DW',txt:'中性起诉',count:2},
+      {src:'Sky',txt:'在美国被控',count:1}
+    ],
+    summary:'西方源高度一致追责，F24强调被告94岁高龄引争议'},
+  {name:'普京访华',meta:'5个源 · 27条',
+    angle:[
+      {src:'AJ',txt:'俄方积极表态',count:8},
+      {src:'NYT',txt:'普京被削弱',count:6},
+      {src:'F24',txt:'危机管理而非胜利',count:6},
+      {src:'BBC',txt:'地缘博弈,无管道协议',count:4},
+      {src:'DW',txt:'中性报道',count:3}
+    ],
+    summary:'西方一致视为"弱势普京"访华，强调未达成实质性成果'},
+  {name:'美伊谈判',meta:'7个源 · 93条（新华社11天追踪）',
+    angle:[
+      {src:'Xinhua',txt:'从冲突升级到谈判曙光',count:93},
+      {src:'NYT',txt:'推迟重大攻击',count:8},
+      {src:'AJ',txt:'战争持续82天',count:6},
+      {src:'BBC',txt:'特朗普叫停攻击',count:5},
+      {src:'DW',txt:'国会限制开战权',count:4},
+      {src:'F24',txt:'伊朗两手准备',count:3},
+      {src:'Sky',txt:'战争策略出错',count:2}
+    ],
+    summary:'新华社立场：美国从"威胁者"转为"谈判对手"，伊朗始终主权正当方'},
+  {name:'埃博拉疫情',meta:'6个源·33条',
+    angle:[
+      {src:'NYT',txt:'WHO反应滞后',count:9},
+      {src:'BBC',txt:'当地恐惧扩散加速',count:7},
+      {src:'AJ',txt:'美方限制刚果入境',count:5},
+      {src:'DW',txt:'德国收治+长期威胁',count:4},
+      {src:'F24',txt:'基础设施薄弱',count:4},
+      {src:'Sky',txt:'数字简报',count:2}
+    ],
+    summary:'NYT批评WHO反应慢，BBC聚焦人道层面，DW兼顾欧洲安全'},
+  {name:'俄乌新攻势',meta:'6个源·14条',
+    angle:[
+      {src:'DW',txt:'外溢北约+乌方腐败',count:5},
+      {src:'BBC',txt:'武器改变战争形态',count:3},
+      {src:'NYT',txt:'环境灾难',count:2},
+      {src:'F24',txt:'乌总理表态',count:2},
+      {src:'AJ',txt:'俄假外交',count:1},
+      {src:'Sky',txt:'机器人战争',count:1}
+    ],
+    summary:'DW报道最密集，BBC/NYT视角互补，Sky聚焦技术手段'}
+];
+
+var hpIdx=0,hpTimer=null;
+
+function renderHotSpot(idx){
+  var d=HOT_SPOTS[idx];
+  if(!d) return;
+  document.getElementById('hpIdx').textContent=(idx+1)+'/'+HOT_SPOTS.length;
+  var html='<div class="hp-evt"><div class="hp-evt-nm">'+d.name+'</div><div class="hp-evt-meta">'+d.meta+'</div></div>';
+  html+='<div class="hp-angle">';
+  var maxShow=7;
+  var items=d.angle.slice();
+  items.sort(function(a,b){return b.count-a.count;});
+  var maxCount=items.length>0?items[0].count:1;
+  for(var i=0;i<items.length && i<maxShow;i++){
+    var a=items[i];
+    var barW=Math.max(2,Math.round(a.count/maxCount*40));
+    html+='<div class="hp-src">';
+    html+='<span class="hp-sn">'+a.src+'</span>';
+    html+='<span class="hp-sd">'+a.txt+'</span>';
+    html+='<span class="hp-bar" style="width:'+barW+'px"></span>';
+    html+='<span class="hp-count">'+a.count+'</span>';
+    html+='</div>';
+  }
+  while(items.length<maxShow){
+    html+='<div class="hp-src hp-src-empty"><span class="hp-sn">&nbsp;</span><span class="hp-sd">&nbsp;</span></div>';
+    items.push({});
+  }
+  html+='</div>';
+  if(d.summary){
+    html+='<div class="hp-summary">'+d.summary+'</div>';
+  }
+  document.getElementById('hpBody').innerHTML=html;
+  var dotsHtml='';
+  for(var i=0;i<HOT_SPOTS.length;i++){
+    dotsHtml+='<div class="hp-dot'+(i===idx?' active':'')+'" onclick="switchHot('+i+')"></div>';
+  }
+  document.getElementById('hpDots').innerHTML=dotsHtml;
+}
+
+function switchHot(idx){
+  hpIdx=idx;
+  renderHotSpot(hpIdx);
+  clearInterval(hpTimer);
+  hpTimer=setInterval(function(){hpIdx=(hpIdx+1)%HOT_SPOTS.length;renderHotSpot(hpIdx);},8000);
+}
+
+renderHotSpot(0);
+hpTimer=setInterval(function(){hpIdx=(hpIdx+1)%HOT_SPOTS.length;renderHotSpot(hpIdx);},8000);
+
+function updateDate(){
+  var now=new Date();
+  var d=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  var t=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('mainDate').textContent=d+'  '+t;
+}
+
+function toggleBar(){
+  var bar=document.getElementById('bar');
+  var btn=document.getElementById('barFold');
+  bar.classList.toggle('folded');
+  btn.textContent=bar.classList.contains('folded')?'◂':'▸';
+}
+document.getElementById('bar').classList.add('folded');
+document.getElementById('barFold').textContent='◂';
+updateDate();setInterval(updateDate,1000);
+</script>
+
+<script>
+(function(){
+var wcData=[
+  {name:"Iran",value:93},{name:"Trump",value:72},{name:"冲突",value:52},
+  {name:"Putin",value:48},{name:"Castro",value:45},{name:"Hormuz",value:38},
+  {name:"Ebola",value:33},{name:"美伊",value:30},{name:"Ukraine",value:28},
+  {name:"Gaza",value:25},{name:"sanctions",value:22},{name:"DRCongo",value:20},
+  {name:"ceasefire",value:18},{name:"diplomacy",value:16},{name:"和平",value:15},
+  {name:"NATO",value:14},{name:"制裁",value:12}
+];
+var wcChart=echarts.init(document.getElementById("wordCloudCard"));
+function renderWC(){
+  wcChart.setOption({
+    backgroundColor:"transparent",
+    series:[{type:"wordCloud",shape:"circle",sizeRange:[14,40],
+      rotationRange:[-20,20],rotationStep:30,gridSize:10,
+      layoutAnimation:true,
+      textStyle:{fontFamily:"sans-serif",fontWeight:"normal",
+        color:function(){var cs=["#5a8ae8","#5ac8e8","#8ae85a","#e8b85a","#e8865a","rgba(200,215,240,0.7)","#f5a623"];return cs[Math.floor(Math.random()*cs.length)];}
+      },
+      emphasis:{textStyle:{fontSize:42,fontWeight:"bold"}},
+      data:wcData.sort(function(){return Math.random()-0.5;})
+    }]
+  });
+}
+renderWC();
+setInterval(function(){renderWC();},12000);
+})();
+</script>
+
+</div>
+</div>
+</div></div>
+</div>
+
+
+
+<!-- 新闻弹窗叠加层 -->
+<div id="newsPopup" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:100;background:rgba(0,0,0,0.7);justify-content:center;align-items:center;animation:fadeIn 0.4s ease-out;">
+  <div id="popupContainer" style="width:680px;max-width:90vw;max-height:90vh;overflow:auto;border-radius:16px;box-shadow:0 0 80px rgba(200,60,0,0.3),0 20px 60px rgba(0,0,0,0.8);background:#0a0a1a;">
+    <div id="guidePage" style="display:flex;align-items:center;justify-content:center;min-height:500px;flex-direction:column;text-align:center;padding:60px 40px;cursor:pointer;" onclick="unlockAndStart()">
+      <div style="font-size:60px;margin-bottom:20px;">🔊</div>
+      <h1 style="font-size:28px;color:#fff;margin-bottom:12px;">全球新闻语音播报</h1>
+      <p style="font-size:15px;color:#aaa;margin:6px 0;">即将为您播报最新全球热点新闻</p>
+      <p style="color:#c83200;font-weight:700;margin-top:16px;animation:pulse 1.5s infinite;">👆 点击任意位置开始</p>
+    </div>
+    <div id="newsPage" style="display:none;width:100%;">
+      <div style="width:100%;overflow:hidden;border-radius:16px;background:#0a0a1a;">
+        <div style="background:linear-gradient(90deg,rgba(56,132,255,.2),rgba(20,60,120,.3));padding:8px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(56,132,255,.1)">
+          <span style="background:rgba(56,132,255,.15);color:#88aadd;font-weight:700;font-size:12px;padding:2px 8px;border-radius:3px;letter-spacing:1px" id="popSrcLabel">新华社</span>
+          <span style="color:#6a8abf;font-size:11px">全球新闻语音播报</span>
+        </div>
+        <div id="popSlideshow" style="position:relative;width:100%;overflow:hidden;background:#050a14;min-height:280px">
+          <img id="popImage" src="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:none;" onerror="this.style.display='none'">
+          <div id="popScript" style="position:absolute;top:0;left:0;right:0;bottom:0;padding:24px;font-size:15px;color:#bcc8d8;line-height:1.8;overflow:auto;display:flex;align-items:center;justify-content:center;text-align:center"></div>
+        </div>
+        <div style="padding:16px 24px 20px;border-left:3px solid rgba(56,132,255,.4);background:linear-gradient(180deg,rgba(56,132,255,.03),transparent)">
+          <h2 id="popTitle" style="font-size:22px;color:#d8e0f0;font-weight:700;line-height:1.5;margin:0"></h2>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes fadeIn {from{opacity:0}to{opacity:1}}
+@keyframes fadeOut {from{opacity:1}to{opacity:0}}
+#newsPopup.fadeOut {animation:fadeOut 0.3s ease-in;}
+
+
+
+
+</style>
+
+<script src="news_popup.js"></script>
+</script>
+
+</body>

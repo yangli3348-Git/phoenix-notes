@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<title>凤凰卫视 · 资讯汇聚 · 电波传播</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a1628;display:flex;justify-content:center;align-items:center;height:100vh;font-family:Noto Sans SC,sans-serif;overflow:hidden}
+#chart{width:100vw;height:100vh;position:relative}
+canvas.overlay{position:absolute;top:0;left:0;pointer-events:none;z-index:10}
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<script>
+fetch('./world.json?v='+Date.now()).then(r=>r.json()).then(wm=>{
+  echarts.registerMap('world',wm);
+  var ch=echarts.init(document.getElementById('chart'));
+  var hq=[114.17,22.32];
+  var stations=[
+    {name:'北京',lng:116.46,lat:39.92,v:85},{name:'上海',lng:121.48,lat:31.22,v:65},
+    {name:'东京',lng:139.69,lat:35.69,v:70},{name:'首尔',lng:126.98,lat:37.57,v:55},
+    {name:'伦敦',lng:-0.13,lat:51.51,v:80},{name:'巴黎',lng:2.35,lat:48.86,v:60},
+    {name:'纽约',lng:-74.01,lat:40.71,v:75},{name:'洛杉矶',lng:-118.24,lat:34.05,v:50},
+    {name:'悉尼',lng:151.21,lat:-33.87,v:45},{name:'新加坡',lng:103.82,lat:1.35,v:40},
+    {name:'莫斯科',lng:37.62,lat:55.76,v:55},{name:'开罗',lng:31.24,lat:30.04,v:35},
+    {name:'曼谷',lng:100.50,lat:13.76,v:38},{name:'迪拜',lng:55.27,lat:25.20,v:42},
+    {name:'台北',lng:121.57,lat:25.03,v:50},{name:'温哥华',lng:-123.12,lat:49.28,v:35}
+  ];
+
+  var gatherLines=stations.map(function(s){return{coords:[[s.lng,s.lat],hq]};});
+
+  // 随机受众活跃城市（华人聚居或主要城市）
+  var activityCities=[
+    // 北美
+    {name:'纽约',lng:-74.01,lat:40.71},{name:'洛杉矶',lng:-118.24,lat:34.05},
+    {name:'旧金山',lng:-122.42,lat:37.77},{name:'温哥华',lng:-123.12,lat:49.28},
+    {name:'多伦多',lng:-79.38,lat:43.65},{name:'芝加哥',lng:-87.63,lat:41.88},
+    {name:'休斯顿',lng:-95.36,lat:29.76},{name:'西雅图',lng:-122.33,lat:47.61},
+    // 欧洲
+    {name:'伦敦',lng:-0.13,lat:51.51},{name:'巴黎',lng:2.35,lat:48.86},
+    {name:'柏林',lng:13.40,lat:52.52},{name:'罗马',lng:12.50,lat:41.90},
+    {name:'马德里',lng:-3.70,lat:40.42},{name:'阿姆斯特丹',lng:4.90,lat:52.37},
+    {name:'莫斯科',lng:37.62,lat:55.76},{name:'伊斯坦布尔',lng:28.98,lat:41.01},
+    // 亚洲
+    {name:'东京',lng:139.69,lat:35.69},{name:'首尔',lng:126.98,lat:37.57},
+    {name:'新加坡',lng:103.82,lat:1.35},{name:'吉隆坡',lng:101.69,lat:3.14},
+    {name:'曼谷',lng:100.50,lat:13.76},{name:'马尼拉',lng:120.98,lat:14.58},
+    {name:'雅加达',lng:106.83,lat:-6.21},{name:'迪拜',lng:55.27,lat:25.20},
+    // 大洋洲
+    {name:'悉尼',lng:151.21,lat:-33.87},{name:'墨尔本',lng:144.96,lat:-37.81},
+    {name:'奥克兰',lng:174.76,lat:-36.85},
+    // 南美洲
+    {name:'圣保罗',lng:-46.63,lat:-23.55},{name:'布宜诺斯艾利斯',lng:-58.38,lat:-34.60},
+    {name:'利马',lng:-77.04,lat:-12.05},{name:'圣地亚哥',lng:-70.65,lat:-33.46},
+    {name:'加拉加斯',lng:-66.88,lat:10.48},
+    // 非洲
+    {name:'开普敦',lng:18.42,lat:-33.93},{name:'约翰内斯堡',lng:28.05,lat:-26.20},
+    {name:'拉各斯',lng:3.38,lat:6.52},{name:'内罗毕',lng:36.82,lat:-1.29},
+    {name:'罗安达',lng:13.23,lat:-8.84},{name:'哈拉雷',lng:31.05,lat:-17.83}
+  ];
+
+  // 去重
+  var seen={};
+  var uniqueCities=[];
+  for(var i=0;i<activityCities.length;i++){
+    var key=activityCities[i].name;
+    if(!seen[key]){seen[key]=true;uniqueCities.push(activityCities[i]);}
+  }
+  activityCities=uniqueCities;
+
+  ch.setOption({
+    backgroundColor:'transparent',
+    geo:{
+      map:'world',roam:true,left:300,right:300,top:100,bottom:200,
+      itemStyle:{areaColor:'rgba(16,42,80,0.35)',borderColor:'rgba(56,132,255,0.1)',borderWidth:0.5},
+      emphasis:{itemStyle:{areaColor:'rgba(56,132,255,0.1)'},label:{show:false}},
+      label:{show:false}
+    },
+    series:[
+      {type:'lines',coordinateSystem:'geo',
+        data:gatherLines,
+        lineStyle:{color:'rgba(56,132,255,0.4)',width:1,curveness:0.2,opacity:0.6},
+        effect:{show:true,period:6,trailLength:0.1,symbol:'arrow',symbolSize:6,color:'#3884ff'},
+        zlevel:2},
+      {type:'scatter',coordinateSystem:'geo',
+        data:stations.map(function(s){return{name:s.name,value:[s.lng,s.lat,s.v]};}),
+        symbolSize:function(v){return Math.sqrt(v[2])*2+4;},
+        itemStyle:{color:'rgba(56,132,255,0.6)',shadowBlur:8,shadowColor:'rgba(56,132,255,0.3)'},
+        label:{show:true,formatter:function(p){return p.name;},fontSize:9,color:'rgba(232,237,245,0.5)',distance:4},
+        zlevel:3},
+      {type:'scatter',coordinateSystem:'geo',
+        data:[{name:'香港总部',value:[114.17,22.32,150]}],
+        symbol:'image://./logo.png',
+        symbolSize:32,
+        itemStyle:{shadowBlur:0},
+        label:{show:false},
+        zlevel:3}
+    ]
+  });
+  window.addEventListener('resize',function(){ch.resize();});
+
+  // Canvas overlay - 电波 + 受众气泡
+  var overlay=document.createElement('canvas');
+  overlay.className='overlay';
+  overlay.width=window.innerWidth;
+  overlay.height=window.innerHeight;
+  document.getElementById('chart').appendChild(overlay);
+  var ctx=overlay.getContext('2d');
+
+  // 电波
+  var maxRadius=1200;
+  function updateMaxRadius(){
+    var pa=ch.convertToPixel({geoIndex:0},[-149.9,61.22]);
+    var ph=ch.convertToPixel({geoIndex:0},[114.17,22.32]);
+    if(pa&&ph){
+      var dx=pa[0]-ph[0],dy=pa[1]-ph[1];
+      maxRadius=Math.sqrt(dx*dx+dy*dy)*1.5;
+    }
+  }
+  updateMaxRadius();
+  ch.on('georoam',updateMaxRadius);
+
+  var rings=[];
+  function addRing(){
+    updateMaxRadius();
+    rings.push({step:0,total:150,maxSize:maxRadius,maxAlpha:0.2});
+  }
+  addRing();
+  setInterval(addRing,3000);
+
+  // 受众活跃泡泡（随机延时登场）
+  var activityDots=[];
+  var spawnedIndices=[];
+  
+  function spawnActivityDot(){
+    if(spawnedIndices.length>=activityCities.length) return;
+    var avail=[];
+    for(var i=0;i<activityCities.length;i++){
+      if(spawnedIndices.indexOf(i)===-1) avail.push(i);
+    }
+    if(avail.length===0) return;
+    var idx=avail[Math.floor(Math.random()*avail.length)];
+    spawnedIndices.push(idx);
+    var c=activityCities[idx];
+    activityDots.push({
+      lng:c.lng,lat:c.lat,
+      baseSize:4+Math.random()*8,
+      pulseSpeed:0.02+Math.random()*0.03,
+      phase:Math.random()*Math.PI*2,
+      alpha:0.3+Math.random()*0.3
+    });
+    setTimeout(spawnActivityDot,500+Math.random()*1500);
+  }
+  // 3秒后开始出第一个泡泡
+  setTimeout(spawnActivityDot,3000);
+
+  ch.on('georoam',function(){
+    overlay.width=document.getElementById('chart').offsetWidth;
+    overlay.height=document.getElementById('chart').offsetHeight;
+  });
+  window.addEventListener('resize',function(){
+    overlay.width=window.innerWidth;
+    overlay.height=window.innerHeight;
+  });
+
+  var frame=0;
+  setInterval(function(){
+    frame++;
+    ctx.clearRect(0,0,overlay.width,overlay.height);
+    var px=ch.convertToPixel({geoIndex:0},[114.17,22.32]);
+    if(!px) return;
+    var tl=ch.convertToPixel({geoIndex:0},[-180,85]);
+    var br=ch.convertToPixel({geoIndex:0},[180,-85]);
+    if(!tl||!br) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(tl[0],tl[1],br[0]-tl[0],br[1]-tl[1]);
+    ctx.clip();
+
+    // 画电波
+    for(var i=rings.length-1;i>=0;i--){
+      var r=rings[i];
+      if(r.step>r.total){rings.splice(i,1);continue;}
+      var t=r.step/r.total;
+      ctx.beginPath();
+      ctx.arc(px[0],px[1],r.maxSize*t,0,Math.PI*2);
+      ctx.strokeStyle='rgba(245,166,35,'+r.maxAlpha+')';
+      ctx.lineWidth=2;
+      ctx.stroke();
+      r.step++;
+    }
+
+    // 画活跃度泡泡
+    for(var i=0;i<activityDots.length;i++){
+      var d=activityDots[i];
+      var p=ch.convertToPixel({geoIndex:0},[d.lng,d.lat]);
+      if(!p) continue;
+      var pulse=Math.sin(frame*d.pulseSpeed+d.phase)*0.3+0.7;
+      var size=d.baseSize*pulse;
+      var alpha=d.alpha*pulse;
+      // 外发光
+      var grad=ctx.createRadialGradient(p[0],p[1],0,p[0],p[1],size*3);
+      grad.addColorStop(0,'rgba(245,166,35,'+(alpha*0.6)+')');
+      grad.addColorStop(0.4,'rgba(245,166,35,'+(alpha*0.2)+')');
+      grad.addColorStop(1,'rgba(245,166,35,0)');
+      ctx.beginPath();
+      ctx.arc(p[0],p[1],size*3,0,Math.PI*2);
+      ctx.fillStyle=grad;
+      ctx.fill();
+      // 核心圆点
+      ctx.beginPath();
+      ctx.arc(p[0],p[1],size,0,Math.PI*2);
+      ctx.fillStyle='rgba(245,166,35,'+alpha+')';
+      ctx.fill();
+    }
+
+    ctx.restore();
+  },60);
+});
+</script>
+</body>
+</html>

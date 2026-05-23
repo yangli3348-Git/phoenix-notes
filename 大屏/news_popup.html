@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080d1a;color:#ddd;font-family:"PingFang SC","Microsoft YaHei",sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden}
+body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at 50% 0%,rgba(56,132,255,.1) 0%,transparent 60%),radial-gradient(ellipse at 80% 30%,rgba(132,180,255,.05) 0%,transparent 40%);z-index:-1}
+.popup{width:720px;max-width:95vw;background:linear-gradient(135deg,#101a2a 0%,#0c1525 50%,#101a2a 100%);border:1px solid rgba(56,132,255,.15);border-radius:16px;box-shadow:0 0 60px rgba(56,132,255,.1),0 20px 60px rgba(0,0,0,.6);overflow:hidden;animation:slideIn .5s ease-out}
+@keyframes slideIn{from{opacity:0;transform:translateY(40px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+.header-bar{background:linear-gradient(90deg,rgba(56,132,255,.2),rgba(20,60,120,.3));padding:8px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(56,132,255,.1)}
+.src-logo{background:rgba(56,132,255,.15);color:#88aadd;font-weight:700;font-size:12px;padding:2px 8px;border-radius:3px;letter-spacing:1px}
+.src-tag{color:#6a8abf;font-size:11px}
+.slideshow{position:relative;width:100%;height:340px;overflow:hidden;background:#050a14}
+.slide{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;transition:opacity .8s ease}
+.slide.active{opacity:1}
+.slide img{width:100%;height:100%;object-fit:cover}
+.caption-bar{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:14px 20px;display:flex;gap:14px;font-size:11px;color:#7a8a9f}
+.title-block{padding:16px 24px 20px;border-left:3px solid rgba(56,132,255,.4);background:linear-gradient(180deg,rgba(56,132,255,.03),transparent)}
+.title-block h2{font-size:22px;color:#d8e0f0;font-weight:700;line-height:1.5;margin:0}
+</style>
+</head>
+<body>
+<div class="popup">
+  <div class="header-bar">
+    <span class="src-logo" id="srcLabel">NEWS</span>
+    <span class="src-tag">全球新闻语音播报</span>
+  </div>
+  <div class="slideshow" id="slideshow"></div>
+  <div class="title-block">
+    <h2 id="headline"></h2>
+  </div>
+</div>
+<script>
+// 从 URL 参数取源名: ?src=bbc 或 ?src=rt
+var p = new URLSearchParams(location.search);
+var src = p.get('src') || 'bbc';
+
+var DATA = {
+  bbc: {
+    source: 'BBC',
+    title: '美国国务卿卢比奥称古巴对美国构成国家安全威胁',
+    images: [
+      'https://ichef.bbci.co.uk/news/1024/branded_news/7399/live/04ee7920-5553-11f1-8b8c-6d33e1d5abb6.jpg',
+      'https://ichef.bbci.co.uk/news/1024/cpsprodpb/eecb/live/c8f720c0-5511-11f1-8b8c-6d33e1d5abb6.jpg.webp',
+      'https://ichef.bbci.co.uk/news/1024/cpsprodpb/c02d/live/adb92850-5555-11f1-b682-cf91850925ea.jpg.webp',
+      'https://ichef.bbci.co.uk/news/1024/cpsprodpb/9c3d/live/dc634240-553b-11f1-a125-a1007a98f90d.jpg.webp',
+      'https://ichef.bbci.co.uk/images/ic/1024xn/p0nmn75p.jpg'
+    ]
+  },
+  rt: {
+    source: 'RT',
+    title: '以色列节省导弹 美国消耗库存 — 美伊战争中拦截弹差距',
+    images: [
+      'https://mf.b37mrtl.ru/files/2026.05/article/6a0f700385f5403a9662a2d1.jpg'
+    ]
+  }
+};
+
+// 从 URL 参数获取数据
+var d = {};
+var urlTitle = p.get('title');
+d.source = src.toUpperCase();
+d.title = urlTitle ? decodeURIComponent(urlTitle) : (DATA[src] || DATA.bbc).title;
+d.images = [];
+// 从大屏 window.parent 拿 popupData 补充图片
+try {
+  if (window.parent && window.parent.popupData) {
+    var match = window.parent.popupData.filter(function(item) {
+      return (item.source || '').replace('-world','').toLowerCase() === src.toLowerCase();
+    });
+    if (match.length && match[match.length-1].images) {
+      d.images = match[match.length-1].images;
+    }
+  }
+} catch(e) {}
+document.getElementById('srcLabel').textContent = d.source;
+document.getElementById('headline').textContent = d.title;
+
+// 渲染图片（没图就隐藏轮播区，用纯色占位）
+var ss = document.getElementById('slideshow');
+if (!d.images || !d.images.length) {
+  ss.style.height = '80px';
+  ss.style.background = 'linear-gradient(135deg, #0d1525, #151a2a)';
+  ss.innerHTML = '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center"><div style="font-size:40px;margin-bottom:10px">📡</div><div style="font-size:12px;color:#557799">新华社 · 全球新闻</div></div>';
+} else {
+  d.images.forEach(function(img, i) {
+  var div = document.createElement('div');
+  div.className = 'slide' + (i===0 ? ' active' : '');
+  div.innerHTML = '<img src="' + img + '">';
+  ss.appendChild(div);
+});
+
+  });
+}
+// 轮播
+var slides = ss.querySelectorAll('.slide');
+if (slides.length > 1) {
+  var cs = 0;
+  setInterval(function() {
+    slides.forEach(function(s,i) { s.classList.toggle('active', i===cs); });
+    cs = (cs + 1) % slides.length;
+  }, 5000);
+}
+</script>
+</body>
+</html>
