@@ -5,6 +5,7 @@
 set -e
 
 SUB_URL="https://s.youyun666.site/link/C4AqEXlegnqLE4No?clash=1"
+# 配置文件路径
 CONFIG_PATH="/opt/clash/config.yaml"
 BACKUP_DIR="/opt/clash/backups"
 TMP_FILE="/tmp/youyun_sub.yaml"

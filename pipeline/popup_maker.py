@@ -1,6 +1,8 @@
 """
 🎙️ 进程二：弹窗制作器
-每15分钟: 从 SQLite 扫描未处理新闻 → 抓详情 → DeepSeek口播 → TTS → 入库+popup_data.json
+每15分钟: 从DB扫描未处理新闻 → 抓详情 → DeepSeek口播 → TTS → 入库+popup_data.json
+
+依赖: config/sources.py, lib/db.py, lib/fetcher.py, lib/script_gen.py, lib/tts.py
 """
 
 import os, sys, json, time
@@ -8,10 +10,10 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fetcher import fetch
-from script_gen import generate
-from tts import synthesize
-import db
+from lib.fetcher import fetch
+from lib.script_gen import generate
+from lib.tts import synthesize
+from lib import db
 
 # ── 数据路径 ──
 HERE = os.path.dirname(os.path.abspath(__file__))

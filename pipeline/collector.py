@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-📡 进程一：标题采集器（轻量常驻）
-每15分钟: 轮询9源 → 去重(DB) → DeepSeek 翻译+坐标 → 入SQLite
+📡 进程一：标题采集器
+每15分钟: 轮询源 → 去重 → DeepSeek翻译+坐标 → 入SQLite
+
+依赖: config/sources.py, lib/db.py
 """
 
 import subprocess, re, json, time, os, requests
 from datetime import datetime, timezone, timedelta
 
-# ── 绝对路径 ──
+# ── 路径 ──
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys_dir = os.path.join(HERE, "..", "..", "pipeline")  # 放回当前目录
 DATA_DIR = os.path.join(HERE, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -19,14 +22,14 @@ DEEPSEEK_KEY = "sk-9f7eb5c437c74b5ea22af41f230ce2b4"
 PROXY_URL = "http://127.0.0.1:7890"
 
 # ── 源 ──
-from sources import SOURCES
+from config.sources import SOURCES
 
 if FORCE_PROXY:
     for s in SOURCES:
         s["proxy"] = True
 
 # ── 数据库 ──
-import db
+from lib import db
 source_order = [s["name"] for s in SOURCES]
 
 def log(msg):
