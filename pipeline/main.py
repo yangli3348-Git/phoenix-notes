@@ -72,21 +72,24 @@ def process_item(item, processed, popup_data):
 
     print(f"  📡 [{src}] {title}...")
 
-    # 如果 RSS 已包含完整正文，直接使用，跳过详情抓取
+    # 如果 RSS 已包含足够文本，直接使用，跳过详情抓取
     rss_full_text = item.get("full_text", "")
     rss_description = item.get("description", "")
     rss_images = item.get("images", [])
 
-    if rss_full_text and len(rss_full_text) >= 100:
+    # 决定用哪段文本：优先 full_text，其次 description
+    rss_text = rss_full_text if (rss_full_text and len(rss_full_text) >= 100) else rss_description
+
+    if rss_text and len(rss_text) >= 100:
         detail = {
             "title": item.get("title_original", item.get("title", "")),
-            "text": rss_full_text,
+            "text": rss_text,
             "images": rss_images,
             "url": item.get("link", ""),
         }
-        print(f"    ⚡ RSS已有正文({len(rss_full_text)}字)，跳过抓详情")
+        print(f"    ⚡ RSS预取({len(rss_text)}字/{len(rss_images)}图)，跳过抓详情")
     else:
-        # 构造 item 给 fetcher（兼容旧格式）
+        # 构造 item 给 fetcher（兼容旧格式，同时传 RSS 预取数据备用）
         fetch_item = {
             "source": src,
             "title": item.get("title_original", item.get("title", "")),
@@ -96,7 +99,7 @@ def process_item(item, processed, popup_data):
             "images": rss_images,
         }
 
-        # 1. 抓详情
+        # 抓详情
         detail = fetch(src, fetch_item)
         if not detail or len(detail.get("text", "")) < 30:
             processed[tid] = True
