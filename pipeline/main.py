@@ -77,6 +77,12 @@ def process_item(item, processed, popup_data):
     has_rss_images = len(rss_images) > 0
     has_xin_images = src == "xin-world" and item.get("has_images", False)
 
+    # 新华社：RSS无图就不抓详情
+    if src == "xin-world" and not has_xin_images:
+        print(f"    ⏭️ 新华社无配图，跳过")
+        processed[tid] = True
+        return None
+
     if has_rss_text and has_rss_images:
         # RSS 已有文字+图片 → 跳过详情抓取
         detail = {
