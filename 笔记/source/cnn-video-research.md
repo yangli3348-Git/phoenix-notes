@@ -1,35 +1,24 @@
-# CNN 视频新闻研究
+# CNN 视频获取完整方案
 
-## 视频条目
-- sitemap 中占 84/226 条（37%），当前已过滤
-- URL 路径含 `/video/`
-- 标题+日期可用，无图片直接提供
+## 视频 CDN
+- 域名: `gcp.apac-free.prd.media.max.com` (Warner Bros Discovery GCP CDN)
+- 格式: `https://gcp.apac-free.prd.media.max.com/global/{bolt_id}/v/3_ec77d2/v{quality}.mp4`
+- 清晰度: v0(720p) ~ v6(234p)
+- 可直接下载，需要 Origin + Referer 头，不需要代理
 
-## 详情页
-- 纯 JS 渲染（Handlebars 模板），curl 拿不到正文
-- 无 `meta description`
-- 浏览器环境也可能渲染失败（CNN JS 依赖复杂）
+## bolt_id 获取
+- 在页面 HTML 的 `data-bolt-id` 属性中
+- 格式: UUID v4 (如 `6cc1322a-aa25-5b8e-a8eb-2e421290ac95`)
+- **需要 JS 渲染才能拿到**（curl 被反爬）
+- 对应关系: data-bolt-id → playbackInfo API 的 editId → dash.mpd → CDN URL
 
-## 字幕 ✅ 可用
-- 标准 SRT 格式，URL 可从页面 HTML 提取
-- 格式: `https://clips-media-aka.warnermediacdn.com/cnn/clips/{date}/{id}/cc/{slug}.srt`
-- 同时有 .vtt 版本
-- 内容: 完整视频旁白/对话（200-400词）
-- 特点: 逐词展开式，去重后可用
-- 可做口播素材
+## 字幕 ✅
+- URL 可静态获取：`clips-media-aka.warnermediacdn.com/cnn/clips/{date}/{internal_id}-{hash}/cc/{slug}.srt`
+- SRT 格式，逐词展开式
+- 同时有 VTT版本
+- 不需要 bolt_id 就能获取
 
-## 视频文件 ❌ 不可用
-- 视频 URL 是 JS 动态加载，curl 拿不到
-- headless Chromium 也被 CNN 反自动化机制拦截（返回 "Unknown Error"）
-- 需要真实用户浏览器才能渲染页面并获取视频 URL
-- 已尝试: curl → 空 / headless浏览器 → Unknown Error / 页面内evaluate → 无video元素
-
-## 弹窗播放
-- 如果有视频 URL，HTML `<video>` 标签可直接播放
-- 实际无法获取 URL → 不能播视频
-- 替代方案: 字幕当口播素材 + TTS 语音 → 弹窗无需视频本身
-
-## 结论
-- 视频新闻有字幕可作文本素材，但获取成本高（需渲染页面取 SRT URL）
-- 优先使用文字新闻（sitemap 中有 36 条，100% 有图）
-- 视频新闻暂不集成，后续如有需求再研究
+## 路线图
+1. ✅ 字幕直接可用 → 口播素材
+2. ❌ 视频文件 → 需要 bolt_id，curl 拿不到
+3. 🔮 可能的突破: 用浏览器渲染取 data-bolt-id → 拼接 CDN URL → 下载 mp4
