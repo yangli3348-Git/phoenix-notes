@@ -45,6 +45,7 @@ SOURCES = [
         "fetcher": "generic",
         "url": "http://rss.cnn.com/rss/edition.rss",
         "proxy": True,
+        "enabled": False,  # RSS停更，全是2023年旧闻
     },
     {
         "name": "aj",
