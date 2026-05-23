@@ -20,8 +20,9 @@
 
 ## 视频文件 ❌ 不可用
 - 视频 URL 是 JS 动态加载，curl 拿不到
-- 需要 Puppeteer/Playwright 或完整浏览器环境
-- 当前浏览器工具环境也无法获取（页面渲染失败）
+- headless Chromium 也被 CNN 反自动化机制拦截（返回 "Unknown Error"）
+- 需要真实用户浏览器才能渲染页面并获取视频 URL
+- 已尝试: curl → 空 / headless浏览器 → Unknown Error / 页面内evaluate → 无video元素
 
 ## 弹窗播放
 - 如果有视频 URL，HTML `<video>` 标签可直接播放
