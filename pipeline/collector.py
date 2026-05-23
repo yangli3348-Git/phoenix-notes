@@ -115,7 +115,50 @@ def fetch_rss(src):
         link = link_m.group(1).strip() if link_m else ""
         d = re.search(r"<pubDate>(.+?)</pubDate>", item) or re.search(r"<dc:date>(.+?)</dc:date>", item)
         pub_date = d.group(1).strip() if d else ""
-        titles.append({"title": title, "link": link, "pubDate": pub_date})
+
+        # 提取 RSS 中的摘要（去除 HTML 标签）
+        desc_m = re.search(r"<description>(?:<!\[CDATA\[)?(.+?)(?:\]\]>)?</description>", item, re.DOTALL)
+        description = ""
+        images = []
+        if desc_m:
+            raw = desc_m.group(1)
+            # 提取描述里的图片
+            for img in re.findall(r'<img[^>]*src=["\']([^"\']+)["\']', raw, re.DOTALL):
+                if not any(x in img.lower() for x in ['pixel', 'counter', 'tracking']):
+                    images.append(img)
+            # 清理 HTML 标签得到纯文本
+            description = re.sub(r'<[^>]+>', ' ', raw).strip()
+            description = re.sub(r'\s+', ' ', description)
+            # 过滤 RT 的 "Read Full Article at RT.com" 尾巴
+            description = re.sub(r'Read Full Article at .+$', '', description).strip()
+
+        # 提取 media:content / media:thumbnail（BBC / NYT / CNN / F24）
+        if not images:
+            for mc in re.findall(r'<(?:media:content|media:thumbnail)[^>]*url=["\']([^"\']+)["\']', item):
+                images.append(mc)
+
+        # RT 的 content:encoded 里有完整正文
+        enc_m = re.search(r"<content:encoded>(?:<!\[CDATA\[)?(.+?)(?:\]\]>)?</content:encoded>", item, re.DOTALL)
+        full_text = ""
+        if enc_m:
+            raw = enc_m.group(1)
+            # 提取所有 p 标签
+            parts = []
+            for p in re.findall(r'<p[^>]*>(.*?)</p>', raw, re.DOTALL):
+                t2 = re.sub(r'<[^>]+>', ' ', p).strip()
+                t2 = re.sub(r'\s+', ' ', t2)
+                if len(t2) > 25:
+                    parts.append(t2)
+            full_text = " ".join(parts)
+
+        titles.append({
+            "title": title,
+            "link": link,
+            "pubDate": pub_date,
+            "description": description,
+            "images": images,
+            "full_text": full_text,
+        })
     return titles
 
 # ── 去重入库 ──
@@ -148,6 +191,9 @@ def deduplicate(source_name, titles_list):
                 "link": t.get("link", ""),
                 "pubDate": t.get("pubDate", ""),
                 "titleImages": t.get("titleImages", []),
+                "description": t.get("description", ""),
+                "images": t.get("images", []),
+                "full_text": t.get("full_text", ""),
                 "first_seen": now_ts,
             }
             seen_titles[norm] = entry
@@ -262,7 +308,11 @@ def generate_titles_json():
                 "city": info.get("city", "unknown"),
                 "lat": info.get("lat", 0.0),
                 "lng": info.get("lng", 0.0),
-                "has_images": bool(info.get("titleImages")),
+                "has_images": bool(info.get("titleImages") or info.get("images")),
+                # RSS 预取字段（可跳过详情抓取）
+                "description": info.get("description", ""),
+                "images": info.get("images", []),
+                "full_text": info.get("full_text", ""),
             })
 
     titles.sort(key=lambda x: x.get("first_seen", 0), reverse=True)

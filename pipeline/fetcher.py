@@ -265,17 +265,40 @@ class TASSFetcher:
 
 
 class NYTFetcher:
-    """NYT — 采集时已存 RSS description + media (绕过 paywall)"""
+    """NYT — 优先用 RSS description + images (绕过 paywall)，失败则抓详情"""
     name = "nyt"
 
     def fetch(self, item):
         title = item.get("title", "")
-        text = item.get("description", "") or title
-        images = []
-        media_url = item.get("media_url", "")
-        if media_url:
-            images.append(media_url)
-        return {"title": title, "text": text, "images": images, "url": item.get("link", "")}
+        url = item.get("link", "")
+        # RSS 预取数据
+        description = item.get("description", "")
+        images = item.get("images", [])
+
+        # 如果 RSS 已有足够文字直接返回
+        if description and len(description) >= 100:
+            return {"title": title, "text": description, "images": images, "url": url}
+
+        # fallback: 抓详情页（但 NYT 大多有 paywall，内容可能很少）
+        html = http_get(url, use_proxy=True)
+        text = title
+        paras = re.findall(r'<p[^>]*>(.*?)</p>', html, re.DOTALL)
+        parts = []
+        for p in paras[:20]:
+            t = hlib.unescape(re.sub(r'<[^>]+>', ' ', p)).strip()
+            t = re.sub(r'\s+', ' ', t)
+            if len(t) > 25:
+                parts.append(t)
+        if parts:
+            text = " ".join(parts)
+
+        if not images:
+            og = re.search(r'property="og:image"[^>]*content="([^"]+)"', html)
+            if og:
+                images.append(og.group(1))
+
+        return {"title": title, "text": text if len(text) > 50 else description or title,
+                "images": images, "url": url}
 
 
 # ── 工厂 ──

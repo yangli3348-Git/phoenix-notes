@@ -72,19 +72,35 @@ def process_item(item, processed, popup_data):
 
     print(f"  📡 [{src}] {title}...")
 
-    # 构造 item 给 fetcher（兼容旧格式）
-    fetch_item = {
-        "source": src,
-        "title": item.get("title_original", item.get("title", "")),
-        "link": item.get("link", ""),
-        "titleImages": item.get("titleImages", []),
-    }
+    # 如果 RSS 已包含完整正文，直接使用，跳过详情抓取
+    rss_full_text = item.get("full_text", "")
+    rss_description = item.get("description", "")
+    rss_images = item.get("images", [])
 
-    # 1. 抓详情
-    detail = fetch(src, fetch_item)
-    if not detail or len(detail.get("text", "")) < 30:
-        processed[tid] = True
-        return None
+    if rss_full_text and len(rss_full_text) >= 100:
+        detail = {
+            "title": item.get("title_original", item.get("title", "")),
+            "text": rss_full_text,
+            "images": rss_images,
+            "url": item.get("link", ""),
+        }
+        print(f"    ⚡ RSS已有正文({len(rss_full_text)}字)，跳过抓详情")
+    else:
+        # 构造 item 给 fetcher（兼容旧格式）
+        fetch_item = {
+            "source": src,
+            "title": item.get("title_original", item.get("title", "")),
+            "link": item.get("link", ""),
+            "titleImages": item.get("titleImages", []),
+            "description": rss_description,
+            "images": rss_images,
+        }
+
+        # 1. 抓详情
+        detail = fetch(src, fetch_item)
+        if not detail or len(detail.get("text", "")) < 30:
+            processed[tid] = True
+            return None
 
     # 2. DeepSeek 口播
     cn_title, script = generate(detail)
