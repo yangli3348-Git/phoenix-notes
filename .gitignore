@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+*.mp3
+pipeline/data/news.db
+大屏/popup_data.json
+pipeline/scripts/search.sh
