@@ -39,14 +39,16 @@ RETRY_BASE_DELAY = 1.5      # 基础重试间隔
 SOURCES = [
     {"name": "xin-world",  "label": "新华社",  "type": "xin_json",
      "url": "https://english.news.cn/world/ds_7718692eb4e54a328c7913da6f673e4b.json"},
+    {"name": "bbc",        "label": "BBC",     "type": "rss",
+     "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
+    {"name": "cnn",        "label": "CNN",     "type": "rss",
+     "url": "http://rss.cnn.com/rss/edition.rss"},
     {"name": "tass",       "label": "塔斯社",  "type": "rss",
      "url": "https://tass.com/rss/v2.xml"},
     {"name": "dw",         "label": "德国之声","type": "rss",
      "url": "https://rss.dw.com/rdf/rss-en-all"},
     {"name": "f24",        "label": "法国24",  "type": "rss",
      "url": "https://www.france24.com/en/rss"},
-    {"name": "reuters",    "label": "路透社",  "type": "rss",
-     "url": "https://feeds.reuters.com/reuters/worldNews"},
     {"name": "aj",         "label": "半岛电视台","type": "rss",
      "url": "https://www.aljazeera.com/xml/rss/all.xml"},
     {"name": "reddit",     "label": "Reddit",   "type": "rss",
@@ -183,15 +185,6 @@ def fetch_rss(src: dict) -> list[dict]:
 
         link = (entry.get("link") or "").strip()
 
-        # Google News: HEAD 跟踪重定向拿到真实文章链接
-        real_link = link
-        if src["name"] == "googlenews" and link:
-            try:
-                r = requests.head(link, allow_redirects=True, timeout=5)
-                real_link = r.url if r.url != link else link
-            except Exception:
-                pass  # 失败保留原始 link
-
         # 取 pubDate 字符串
         pub_date_str = ""
         if pub:
@@ -223,7 +216,7 @@ def fetch_rss(src: dict) -> list[dict]:
 
         results.append({
             "title": title,
-            "link": real_link,
+            "link": link,
             "pubDate": pub_date_str,
             "images": images,
             "description": desc[:500],
