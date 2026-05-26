@@ -247,6 +247,38 @@ def collect_all() -> list[dict]:
             except Exception as e:
                 log("WARN", f"  future error: {e}")
 
+    # BBC: 抓详情页 JSON-LD 补摘要 + 大图（RSS 只有 240px 缩略图无摘要）
+    bbc_count = 0
+    for item in results:
+        if item["source_name"] != "bbc":
+            continue
+        if bbc_count >= PER_SOURCE_LIMIT:
+            break
+        bbc_count += 1
+        try:
+            resp = requests.get(item["link"], headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            ld_m = re.search(r'application/ld\+json[^>]*>\s*(\{.*?\})\s*</script>', resp.text, re.DOTALL)
+            if ld_m:
+                ld = json.loads(ld_m.group(1))
+                # 摘要
+                desc = ld.get("description", "").strip()
+                if desc and not item.get("description"):
+                    item["description"] = desc[:500]
+                # 大图
+                img = ld.get("image", {})
+                if isinstance(img, dict) and img.get("url"):
+                    # 只有当前没有图片或只有 RSS 240px 缩略图才替换
+                    old_imgs = item.get("images", [])
+                    new_url = img["url"]
+                    if not old_imgs or any("/240/" in u for u in old_imgs):
+                        item["images"] = [new_url]
+                    elif new_url not in old_imgs:
+                        item["images"] = [new_url] if not old_imgs else [new_url] + old_imgs
+        except Exception:
+            pass  # 详情页失败不影响主流程
+    if bbc_count:
+        log("BBC", f"补{bbc_count}条摘要/大图")
+
     # 按采集时间排序
     results.sort(key=lambda x: x.get("collected_at", 0), reverse=True)
     log("DONE", f"共 {len(results)} 条 (去重后)，来自 {len(SOURCES)} 个源")
