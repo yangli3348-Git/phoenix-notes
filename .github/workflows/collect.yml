@@ -2,11 +2,11 @@ name: Collect World News
 
 on:
   schedule:
-    - cron: '*/30 * * * *'    # 每30分钟
+    - cron: '*/15 * * * *'    # 每15分钟
   workflow_dispatch:            # 手动触发
 
 permissions:
-  contents: write               # git push 权限
+  contents: write
 
 jobs:
   collect:
