@@ -216,8 +216,8 @@ def fetch_source(src: dict) -> tuple[str, list[dict]]:
     """返回 (source_label, items)"""
     name = src["name"]
     try:
-    items = retry(lambda: fetch_rss(src))
-    log("FETCH", f"{src['label']:>8} → {len(items)} 条")
+        items = retry(lambda: fetch_rss(src))
+        log("FETCH", f"{src['label']:>8} → {len(items)} 条")
         return name, items
     except Exception as e:
         log("ERROR", f"{src['label']:>8} ✗ {e}")
