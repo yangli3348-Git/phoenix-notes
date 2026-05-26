@@ -185,16 +185,6 @@ def fetch_rss(src: dict) -> list[dict]:
 
         link = (entry.get("link") or "").strip()
 
-        # Google News: GET 跟踪重定向拿到真实文章链接（stream=True 不下载body）
-        real_link = link
-        if src["name"] == "googlenews" and link:
-            try:
-                r = requests.get(link, allow_redirects=True, timeout=5, stream=True)
-                real_link = r.url
-                r.close()
-            except Exception:
-                pass  # 失败保留原始 Google News link
-
         # 取 pubDate 字符串
         pub_date_str = ""
         if pub:
@@ -226,7 +216,6 @@ def fetch_rss(src: dict) -> list[dict]:
 
         results.append({
             "title": title,
-            "link": real_link,
             "pubDate": pub_date_str,
             "images": images,
             "description": desc[:500],
