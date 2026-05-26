@@ -35,18 +35,18 @@ RETRY_ATTEMPTS = 3          # 单个源重试次数
 RETRY_BASE_DELAY = 1.5      # 基础重试间隔
 
 # ── 源配置 ──
-# type: "rss" → feedparser 通用
+# type: "rss" → feedparser 通用，“xin_json” → 新华社专用
 SOURCES = [
-    {"name": "bbc",        "label": "BBC",     "type": "rss",
-     "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
-    {"name": "cnn",        "label": "CNN",     "type": "rss",
-     "url": "http://rss.cnn.com/rss/edition.rss"},
+    {"name": "xin-world",  "label": "新华社",  "type": "xin_json",
+     "url": "https://english.news.cn/world/ds_7718692eb4e54a328c7913da6f673e4b.json"},
     {"name": "tass",       "label": "塔斯社",  "type": "rss",
      "url": "https://tass.com/rss/v2.xml"},
     {"name": "dw",         "label": "德国之声","type": "rss",
      "url": "https://rss.dw.com/rdf/rss-en-all"},
     {"name": "f24",        "label": "法国24",  "type": "rss",
      "url": "https://www.france24.com/en/rss"},
+    {"name": "reuters",    "label": "路透社",  "type": "rss",
+     "url": "https://feeds.reuters.com/reuters/worldNews"},
     {"name": "aj",         "label": "半岛电视台","type": "rss",
      "url": "https://www.aljazeera.com/xml/rss/all.xml"},
     {"name": "reddit",     "label": "Reddit",   "type": "rss",
@@ -128,6 +128,34 @@ def retry(fn, attempts=RETRY_ATTEMPTS, base_delay=RETRY_BASE_DELAY):
                 time.sleep(delay)
     raise last_exc
 
+# ── 采集：新华社 JSON ──
+def fetch_xinhua(src: dict) -> list[dict]:
+    resp = requests.get(src["url"], headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+    results = []
+    for it in data.get("datasource", []):
+        title = (it.get("showTitle") or "").strip()
+        if not title or len(title) < 10 or is_junk_title(title):
+            continue
+        url = it.get("publishUrl", "")
+        if url.startswith(".."):
+            url = "https://english.news.cn" + url[2:]
+        pub_date = it.get("publishTime", "")
+        images = it.get("titleImages", [])
+        results.append({
+            "title": title,
+            "link": url,
+            "pubDate": pub_date,
+            "images": images,
+            "description": "",
+            "source_name": src["name"],
+            "source_label": src["label"],
+        })
+        if len(results) >= PER_SOURCE_LIMIT:
+            break
+    return results
+
 # ── 采集：通用 RSS/Atom（feedparser）──
 def fetch_rss(src: dict) -> list[dict]:
     d = feedparser.parse(src["url"], agent="Mozilla/5.0 (digest-bot/1.0)")
@@ -154,17 +182,6 @@ def fetch_rss(src: dict) -> list[dict]:
             continue
 
         link = (entry.get("link") or "").strip()
-
-        # Reddit RSS: 从 content 中提取原文链接 (href 指向新闻原文)
-        real_link = link
-        if src["name"] == "reddit":
-            content_val = ""
-            for c in entry.get("content", []):
-                content_val += c.get("value", "")
-            # 匹配 [link] 的 href — 这是新闻原文链接
-            m = re.search(r'<a href="(https?://[^"]+)">\[link\]</a>', content_val)
-            if m:
-                real_link = m.group(1)
 
         # 取 pubDate 字符串
         pub_date_str = ""
@@ -197,7 +214,7 @@ def fetch_rss(src: dict) -> list[dict]:
 
         results.append({
             "title": title,
-            "link": real_link,
+            "link": link,
             "pubDate": pub_date_str,
             "images": images,
             "description": desc[:500],
@@ -212,8 +229,11 @@ def fetch_source(src: dict) -> tuple[str, list[dict]]:
     """返回 (source_label, items)"""
     name = src["name"]
     try:
-    items = retry(lambda: fetch_rss(src))
-    log("FETCH", f"{src['label']:>8} → {len(items)} 条")
+        if src["type"] == "xin_json":
+            items = retry(lambda: fetch_xinhua(src))
+        else:
+            items = retry(lambda: fetch_rss(src))
+        log("FETCH", f"{src['label']:>8} → {len(items)} 条")
         return name, items
     except Exception as e:
         log("ERROR", f"{src['label']:>8} ✗ {e}")
