@@ -51,8 +51,8 @@ SOURCES = [
      "url": "https://www.france24.com/en/rss"},
     {"name": "aj",         "label": "半岛电视台","type": "rss",
      "url": "https://www.aljazeera.com/xml/rss/all.xml"},
-    {"name": "reddit",     "label": "Reddit",   "type": "rss",
-     "url": "https://www.reddit.com/r/worldnews.rss"},
+    {"name": "reddit",     "label": "Reddit",   "type": "reddit_json",
+     "url": "https://www.reddit.com/r/worldnews/hot.json?limit=25"},
     {"name": "googlenews", "label": "Google新闻","type": "rss",
      "url": "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"},
 ]
@@ -158,6 +158,46 @@ def fetch_xinhua(src: dict) -> list[dict]:
             break
     return results
 
+# ── 采集：Reddit JSON API ──
+def fetch_reddit(src: dict) -> list[dict]:
+    """Reddit JSON API — post['url'] = 新闻原文链接，可用于去重"""
+    resp = requests.get(src["url"], headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+    results = []
+    for child in data.get("data", {}).get("children", []):
+        post = child["data"]
+        title = (post.get("title") or "").strip()
+        # 跳过置顶帖/自贴（Live Thread / Discussion Thread）
+        if not title or len(title) < 10 or is_junk_title(title):
+            continue
+        if post.get("stickied") or post.get("is_self"):
+            continue
+        # 原文链接
+        news_url = (post.get("url") or "").strip()
+        # 跳过指向 reddit 内部的链接
+        if "reddit.com" in news_url or "redd.it" in news_url:
+            continue
+        # 时间
+        created = post.get("created_utc", 0)
+        pub_date_str = datetime.fromtimestamp(created, tz=timezone.utc).isoformat() if created else ""
+        # 来自哪个域名
+        domain = post.get("domain", "")
+        desc = f"via {domain}" if domain else ""
+
+        results.append({
+            "title": title,
+            "link": news_url,
+            "pubDate": pub_date_str,
+            "images": [],
+            "description": desc,
+            "source_name": src["name"],
+            "source_label": src["label"],
+        })
+        if len(results) >= PER_SOURCE_LIMIT:
+            break
+    return results
+
 # ── 采集：通用 RSS/Atom（feedparser）──
 def fetch_rss(src: dict) -> list[dict]:
     d = feedparser.parse(src["url"], agent="Mozilla/5.0 (digest-bot/1.0)")
@@ -232,6 +272,8 @@ def fetch_source(src: dict) -> tuple[str, list[dict]]:
     try:
         if src["type"] == "xin_json":
             items = retry(lambda: fetch_xinhua(src))
+        elif src["type"] == "reddit_json":
+            items = retry(lambda: fetch_reddit(src))
         else:
             items = retry(lambda: fetch_rss(src))
         log("FETCH", f"{src['label']:>8} → {len(items)} 条")
