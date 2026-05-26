@@ -45,8 +45,6 @@ SOURCES = [
      "url": "https://rss.dw.com/rdf/rss-en-all"},
     {"name": "f24",        "label": "法国24",  "type": "rss",
      "url": "https://www.france24.com/en/rss"},
-    {"name": "reuters",    "label": "路透社",  "type": "rss",
-     "url": "https://feeds.reuters.com/reuters/worldNews"},
     {"name": "aj",         "label": "半岛电视台","type": "rss",
      "url": "https://www.aljazeera.com/xml/rss/all.xml"},
     {"name": "reddit",     "label": "Reddit",   "type": "rss",
