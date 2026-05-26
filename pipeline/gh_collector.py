@@ -161,7 +161,7 @@ def fetch_xinhua(src: dict) -> list[dict]:
 # ── 采集：Reddit JSON API ──
 def fetch_reddit(src: dict) -> list[dict]:
     """Reddit JSON API — post['url'] = 新闻原文链接，可用于去重"""
-    resp = requests.get(src["url"], headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}, timeout=15)
+    resp = requests.get(src["url"], headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"}, timeout=15)
     resp.raise_for_status()
     data = resp.json()
     results = []
